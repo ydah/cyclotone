@@ -1,38 +1,69 @@
 # Cyclotone
 
-TODO: Delete this and the text below, and describe your gem
+Cyclotone is a Ruby gem for pattern-based live coding. It starts with an exact rational-time core so rhythmic structure can be expressed without floating-point drift, and it exposes immutable event and pattern primitives that can be composed into larger sequencing tools.
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/cyclotone`. To experiment with that code, run `bin/console` for an interactive prompt.
+The current implementation covers the phase-1 core from `.idea/01_technical_specification.md`:
+
+- `Cyclotone::TimeSpan`
+- `Cyclotone::Event`
+- `Cyclotone::Pattern`
+- `Pattern.pure`, `Pattern.silence`, `Pattern.fastcat`, `Pattern.stack`, and `#fmap`
 
 ## Installation
 
-TODO: Replace `UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG` with your gem name right after releasing it to RubyGems.org. Please do not do it earlier due to security reasons. Alternatively, replace this section with instructions to install your gem from git if you don't plan to release to RubyGems.org.
-
-Install the gem and add to the application's Gemfile by executing:
+Add this line to your application's Gemfile:
 
 ```bash
-bundle add UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+bundle add cyclotone
 ```
 
-If bundler is not being used to manage dependencies, install the gem by executing:
+Or install it directly:
 
 ```bash
-gem install UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+gem install cyclotone
 ```
 
 ## Usage
 
-TODO: Write usage instructions here
+```ruby
+require "cyclotone"
+
+beat = Cyclotone::Pattern.fastcat([
+  Cyclotone::Pattern.pure("bd"),
+  Cyclotone::Pattern.pure("sd")
+])
+
+events = beat.query_cycle(0)
+
+events.map { |event| [event.whole.to_s, event.part.to_s, event.value] }
+# => [["[0, 1/2)", "[0, 1/2)", "bd"], ["[1/2, 1)", "[1/2, 1)", "sd"]]
+```
+
+Transform values while keeping structure:
+
+```ruby
+accented = beat.fmap { |value| { sound: value, gain: 0.9 } }
+accented.query_cycle(0).map(&:value)
+# => [{ sound: "bd", gain: 0.9 }, { sound: "sd", gain: 0.9 }]
+```
 
 ## Development
 
-After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
+```bash
+bundle install
+bundle exec rspec
+gem build cyclotone.gemspec
+```
 
-To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and the created tag, and push the `.gem` file to [rubygems.org](https://rubygems.org).
+To install the gem locally for manual experiments:
+
+```bash
+bundle exec rake install
+```
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/cyclotone.
+Bug reports and pull requests are welcome on GitHub at https://github.com/ydah/cyclotone.
 
 ## License
 
