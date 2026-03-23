@@ -1,13 +1,15 @@
 # Cyclotone
 
-Cyclotone is a Ruby gem for pattern-based live coding. It starts with an exact rational-time core so rhythmic structure can be expressed without floating-point drift, and it exposes immutable event and pattern primitives that can be composed into larger sequencing tools.
+Cyclotone is a Ruby gem for pattern-based live coding. It uses exact rational time, composes immutable event patterns, parses a Tidal-style mini-notation, and ships with transforms, control patterns, oscillators, harmony helpers, a scheduler, and a DSL for slot-based performance.
 
-The current implementation covers the phase-1 core from `.idea/01_technical_specification.md`:
+The current implementation includes:
 
 - `Cyclotone::TimeSpan`
 - `Cyclotone::Event`
 - `Cyclotone::Pattern`
-- `Pattern.pure`, `Pattern.silence`, `Pattern.fastcat`, `Pattern.stack`, and `#fmap`
+- Mini-notation parsing and compilation with Euclidean rhythms
+- Pattern transforms for time, concatenation, accumulation, alteration, condition, and sample operations
+- Control factories, oscillators, harmony helpers, OSC/MIDI backends, scheduler, stream management, transitions, and a DSL/REPL entry point
 
 ## Installation
 
@@ -28,23 +30,35 @@ gem install cyclotone
 ```ruby
 require "cyclotone"
 
-beat = Cyclotone::Pattern.fastcat([
-  Cyclotone::Pattern.pure("bd"),
-  Cyclotone::Pattern.pure("sd")
-])
+beat = Cyclotone::Pattern.mn("bd [sd sd] hh cp")
+accented = Cyclotone::Controls.s(beat).gain(0.9)
 
-events = beat.query_cycle(0)
+events = accented.query_cycle(0)
 
 events.map { |event| [event.whole.to_s, event.part.to_s, event.value] }
-# => [["[0, 1/2)", "[0, 1/2)", "bd"], ["[1/2, 1)", "[1/2, 1)", "sd"]]
+# => [
+#      ["[0, 1/4)", "[0, 1/4)", {:s=>"bd", :gain=>0.9}],
+#      ...
+#    ]
 ```
 
-Transform values while keeping structure:
+Top-level DSL:
 
 ```ruby
-accented = beat.fmap { |value| { sound: value, gain: 0.9 } }
-accented.query_cycle(0).map(&:value)
-# => [{ sound: "bd", gain: 0.9 }, { sound: "sd", gain: 0.9 }]
+require "cyclotone"
+include Cyclotone::DSL
+
+setcps Rational(9, 16)
+
+d1 s("bd sd:3 [~ bd] sd").gain(0.8)
+d2 note("0 2 4 7").scale(:minor, root: "c4").s("superpiano")
+d3 s("hh*8").every(4) { |pattern| pattern.fast(2) }.sometimes { |pattern| pattern.degrade }
+```
+
+Open the REPL with:
+
+```bash
+bundle exec ruby exe/cyclotone
 ```
 
 ## Development
@@ -52,6 +66,7 @@ accented.query_cycle(0).map(&:value)
 ```bash
 bundle install
 bundle exec rspec
+bundle exec rubocop
 gem build cyclotone.gemspec
 ```
 

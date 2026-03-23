@@ -1,0 +1,12 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "irb"
+require "cyclotone"
+
+TOPLEVEL_BINDING.receiver.extend(Cyclotone::DSL)
+
+puts "Cyclotone REPL"
+puts "DSL loaded: d1..d16, s, gain, setcps, hush"
+
+IRB.start

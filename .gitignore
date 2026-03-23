@@ -7,6 +7,8 @@
 /pkg/
 /spec/reports/
 /tmp/
+.rubocop_cache_home/
+.rubocop_cache/
 .rspec_status
 Gemfile.lock
 *.bundle
