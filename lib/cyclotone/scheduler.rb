@@ -8,7 +8,7 @@ module Cyclotone
     INTERVAL = 0.05
     DEFAULT_CPS = Rational(9, 16)
 
-    attr_reader :backend
+    attr_reader :backend, :cps, :lookahead, :interval
 
     def initialize(cps: DEFAULT_CPS, backend:, lookahead: LOOKAHEAD, interval: INTERVAL)
       @backend = backend
@@ -20,6 +20,7 @@ module Cyclotone
       @sent = {}
       @running = false
       @start_monotonic = monotonic_time
+      @start_wall_time = Time.now.to_f
       @start_cycle = 0.0
       @last_cycle = 0.0
     end
@@ -42,11 +43,11 @@ module Cyclotone
     end
 
     def tick(now = monotonic_time)
-      patterns_snapshot, cps_value, last_cycle, start_cycle, start_monotonic = @mutex.synchronize do
-        [@patterns.dup, @cps, @last_cycle, @start_cycle, @start_monotonic]
+      patterns_snapshot, cps_value, last_cycle, start_cycle, start_monotonic, start_wall_time = @mutex.synchronize do
+        [@patterns.dup, @cps, @last_cycle, @start_cycle, @start_monotonic, @start_wall_time]
       end
 
-      logical_end = time_to_cycle(now + @lookahead, cps_value, start_cycle, start_monotonic)
+      logical_end = time_to_cycle(now + lookahead, cps_value, start_cycle, start_monotonic)
       return if logical_end <= last_cycle
 
       query_span = TimeSpan.new(Rational(last_cycle.to_r), Rational(logical_end.to_r))
@@ -58,7 +59,7 @@ module Cyclotone
           key = [slot_id, event.onset, event.value]
           next if @sent[key]
 
-          absolute_time = start_monotonic + ((event.onset.to_f - start_cycle) / cps_value)
+          absolute_time = start_wall_time + ((event.onset.to_f - start_cycle) / cps_value)
           backend.send_event(event, at: absolute_time)
           @sent[key] = true
         end
@@ -87,9 +88,18 @@ module Cyclotone
       @mutex.synchronize do
         @start_cycle = value.to_f
         @start_monotonic = monotonic_time
+        @start_wall_time = Time.now.to_f
         @last_cycle = value.to_f
         @sent.clear
       end
+    end
+
+    def backend=(backend)
+      @mutex.synchronize { @backend = backend }
+    end
+
+    def running?
+      @running
     end
 
     private

@@ -5,14 +5,17 @@ module Cyclotone
     class MIDIBackend
       attr_reader :channel
 
-      def initialize(device_name: nil, channel: 0, output: nil)
+      def initialize(device_name: nil, channel: 0, output: nil, schedule: false)
         @channel = channel.to_i
         @output = output || detect_output(device_name)
+        @schedule = schedule
       end
 
       def send_event(event, at: Time.now.to_f)
-        messages_for(event).each do |message|
-          emit(message.merge(at: at))
+        if @schedule
+          schedule_messages(messages_for(event), at: at)
+        else
+          messages_for(event).each { |message| emit(message.merge(at: at)) }
         end
       rescue StandardError => error
         raise ConnectionError, error.message
@@ -50,6 +53,25 @@ module Cyclotone
           @output.call(message)
         elsif @output.respond_to?(:puts)
           @output.puts(message)
+        end
+      end
+
+      def schedule_messages(messages, at:)
+        Thread.new do
+          sleep([at - Time.now.to_f, 0].max)
+
+          messages.each do |message|
+            delay = message[:delay].to_f
+
+            if delay.positive?
+              Thread.new do
+                sleep(delay)
+                emit(message.merge(at: at + delay))
+              end
+            else
+              emit(message.merge(at: at))
+            end
+          end
         end
       end
 

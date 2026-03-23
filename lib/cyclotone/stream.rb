@@ -67,6 +67,25 @@ module Cyclotone
       self
     end
 
+    def use_backend(backend)
+      @scheduler.backend = backend
+      sync_scheduler
+    end
+
+    def start
+      @scheduler.start
+      self
+    end
+
+    def stop
+      @scheduler.stop
+      self
+    end
+
+    def running?
+      @scheduler.running?
+    end
+
     def slot(slot_id)
       @slots[normalize_slot_id(slot_id)]
     end

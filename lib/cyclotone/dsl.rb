@@ -58,6 +58,14 @@ module Cyclotone
       stream.jump(id, pattern)
     end
 
+    def start
+      stream.start
+    end
+
+    def stop
+      stream.stop
+    end
+
     def chord(name, root: 0)
       Harmony.chord(name, root: root)
     end
