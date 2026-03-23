@@ -1,10 +1,31 @@
 # frozen_string_literal: true
 
+require_relative "cyclotone/errors"
+require_relative "cyclotone/support/deterministic"
 require_relative "cyclotone/version"
+require_relative "cyclotone/euclidean"
+require_relative "cyclotone/mini_notation/ast"
+require_relative "cyclotone/mini_notation/parser"
 require_relative "cyclotone/time_span"
 require_relative "cyclotone/event"
+require_relative "cyclotone/transforms/time"
+require_relative "cyclotone/transforms/concatenation"
+require_relative "cyclotone/transforms/accumulation"
+require_relative "cyclotone/transforms/alteration"
+require_relative "cyclotone/transforms/condition"
+require_relative "cyclotone/transforms/sample"
 require_relative "cyclotone/pattern"
+require_relative "cyclotone/mini_notation/compiler"
+require_relative "cyclotone/controls"
+require_relative "cyclotone/oscillators"
+require_relative "cyclotone/harmony"
+require_relative "cyclotone/state"
+require_relative "cyclotone/backends/osc_backend"
+require_relative "cyclotone/backends/midi_backend"
+require_relative "cyclotone/scheduler"
+require_relative "cyclotone/transition"
+require_relative "cyclotone/stream"
+require_relative "cyclotone/dsl"
 
 module Cyclotone
-  class Error < StandardError; end
 end

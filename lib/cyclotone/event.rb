@@ -8,6 +8,7 @@ module Cyclotone
       @whole = whole
       @part = part
       @value = value
+      freeze
     end
 
     def onset
@@ -30,6 +31,14 @@ module Cyclotone
 
     def has_whole?
       !whole.nil?
+    end
+
+    def active_span
+      whole || part
+    end
+
+    def covers_time?(time)
+      active_span.includes?(time)
     end
 
     def with_value(new_value)

@@ -8,9 +8,9 @@ module Cyclotone
       @start = coerce_time(start_time)
       @stop = coerce_time(stop_time)
 
-      return unless @stop < @start
+      raise ArgumentError, "stop time must be greater than or equal to start time" if @stop < @start
 
-      raise ArgumentError, "stop time must be greater than or equal to start time"
+      freeze
     end
 
     def duration
@@ -19,6 +19,10 @@ module Cyclotone
 
     def midpoint
       (start + stop) / 2
+    end
+
+    def cycle_number
+      start.floor
     end
 
     def intersection(other)
@@ -48,6 +52,26 @@ module Cyclotone
       end
 
       spans
+    end
+
+    def shift(amount)
+      normalized_amount = coerce_time(amount)
+
+      self.class.new(start + normalized_amount, stop + normalized_amount)
+    end
+
+    def scale(factor)
+      normalized_factor = coerce_time(factor)
+
+      self.class.new(start * normalized_factor, stop * normalized_factor)
+    end
+
+    def reverse_within(cycle_start, cycle_length = 1)
+      normalized_start = coerce_time(cycle_start)
+      normalized_length = coerce_time(cycle_length)
+      mirror = (normalized_start * 2) + normalized_length
+
+      self.class.new(mirror - stop, mirror - start)
     end
 
     def ==(other)
