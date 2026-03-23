@@ -66,7 +66,6 @@ bundle exec ruby exe/cyclotone
 ```bash
 bundle install
 bundle exec rspec
-bundle exec rubocop
 gem build cyclotone.gemspec
 ```
 
