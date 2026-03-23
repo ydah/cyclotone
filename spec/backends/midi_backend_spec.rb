@@ -13,6 +13,7 @@ RSpec.describe Cyclotone::Backends::MIDIBackend do
     )
 
     expect(backend.messages_for(event).map { |message| message[:type] }).to eq(%i[note_on note_off])
+    expect(backend.messages_for(event).first[:velocity]).to eq(100)
 
     backend.send_event(event, at: 10.0)
 

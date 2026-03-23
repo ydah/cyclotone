@@ -2,26 +2,21 @@
 
 require "cyclotone"
 
-begin
-  require "unimidi"
-rescue LoadError
-  warn "Install unimidi first: gem install unimidi"
-  exit 1
-end
-
-# Plays a MIDI melody for 16 seconds.
-# Set CYCLOTONE_MIDI_DEVICE to pick a specific output, then run:
+# Writes a Standard MIDI File for local playback or DAW import.
 #   bundle exec ruby examples/midi_output.rb
 
-device_name = ENV["CYCLOTONE_MIDI_DEVICE"]
+output_path = ENV.fetch("CYCLOTONE_MIDI_PATH", File.expand_path("../tmp/cyclotone_demo.mid", __dir__))
 channel = ENV.fetch("CYCLOTONE_MIDI_CHANNEL", "0").to_i
+cps = Rational(1, 2)
+bpm = (cps * 240).to_f
 
-backend = Cyclotone::Backends::MIDIBackend.new(
-  device_name: device_name,
+backend = Cyclotone::Backends::MIDIFileBackend.new(
+  path: output_path,
+  bpm: bpm,
   channel: channel,
-  schedule: true
+  track_name: "Cyclotone Demo"
 )
-scheduler = Cyclotone::Scheduler.new(backend: backend, cps: Rational(1, 2))
+scheduler = Cyclotone::Scheduler.new(backend: backend, cps: cps)
 
 melody = Cyclotone::Controls.note("0 2 4 7")
   .scale(:major, root: "c4")
@@ -29,9 +24,8 @@ melody = Cyclotone::Controls.note("0 2 4 7")
   .sustain(0.45)
 
 scheduler.update_pattern(:m1, melody)
-begin
-  scheduler.start
-  sleep 16
-ensure
-  scheduler&.stop
-end
+scheduler.render(duration: 16)
+backend.write!
+
+puts "Wrote #{output_path}"
+puts "Import the file into your DAW or MIDI player to audition the pattern."

@@ -61,6 +61,14 @@ Open the REPL with:
 bundle exec ruby exe/cyclotone
 ```
 
+To generate a local MIDI file for quick verification:
+
+```bash
+bundle exec ruby examples/midi_output.rb
+```
+
+This writes `tmp/cyclotone_demo.mid`, which you can import into a DAW or any MIDI-capable player.
+
 ## Development
 
 ```bash

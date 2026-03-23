@@ -43,29 +43,9 @@ module Cyclotone
     end
 
     def tick(now = monotonic_time)
-      patterns_snapshot, cps_value, last_cycle, start_cycle, start_monotonic, start_wall_time = @mutex.synchronize do
-        [@patterns.dup, @cps, @last_cycle, @start_cycle, @start_monotonic, @start_wall_time]
-      end
-
-      logical_end = time_to_cycle(now + lookahead, cps_value, start_cycle, start_monotonic)
-      return if logical_end <= last_cycle
-
-      query_span = TimeSpan.new(Rational(last_cycle.to_r), Rational(logical_end.to_r))
-
-      patterns_snapshot.each do |slot_id, pattern|
-        pattern.query_span(query_span).each do |event|
-          next unless event.onset
-
-          key = [slot_id, event.onset, event.value]
-          next if @sent[key]
-
-          absolute_time = start_wall_time + ((event.onset.to_f - start_cycle) / cps_value)
-          backend.send_event(event, at: absolute_time)
-          @sent[key] = true
-        end
-      end
-
-      @mutex.synchronize { @last_cycle = logical_end }
+      state = snapshot_state
+      logical_end = time_to_cycle(now + lookahead, state[:cps], state[:start_cycle], state[:start_monotonic])
+      dispatch_until(logical_end, state)
     end
 
     def update_pattern(slot_id, pattern)
@@ -102,10 +82,57 @@ module Cyclotone
       @running
     end
 
+    def render(duration:)
+      duration_value = duration.to_f
+      raise ArgumentError, "render duration must be non-negative" if duration_value.negative?
+
+      state = snapshot_state
+      state[:backend].begin_capture(at: state[:start_wall_time]) if state[:backend].respond_to?(:begin_capture)
+
+      logical_end = state[:start_cycle] + (duration_value * state[:cps])
+      dispatch_until(logical_end, state)
+      self
+    end
+
     private
 
     def monotonic_time
       Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    end
+
+    def snapshot_state
+      @mutex.synchronize do
+        {
+          patterns: @patterns.dup,
+          cps: @cps,
+          last_cycle: @last_cycle,
+          start_cycle: @start_cycle,
+          start_monotonic: @start_monotonic,
+          start_wall_time: @start_wall_time,
+          backend: @backend
+        }
+      end
+    end
+
+    def dispatch_until(logical_end, state)
+      return if logical_end <= state[:last_cycle]
+
+      query_span = TimeSpan.new(Rational(state[:last_cycle].to_r), Rational(logical_end.to_r))
+
+      state[:patterns].each do |slot_id, pattern|
+        pattern.query_span(query_span).each do |event|
+          next unless event.onset
+
+          key = [slot_id, event.onset, event.value]
+          next if @sent[key]
+
+          absolute_time = state[:start_wall_time] + ((event.onset.to_f - state[:start_cycle]) / state[:cps])
+          state[:backend].send_event(event, at: absolute_time)
+          @sent[key] = true
+        end
+      end
+
+      @mutex.synchronize { @last_cycle = logical_end }
     end
 
     def time_to_cycle(time, cps_value, start_cycle, start_monotonic)

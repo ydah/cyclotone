@@ -1,8 +1,12 @@
 # frozen_string_literal: true
 
+require_relative "midi_message_support"
+
 module Cyclotone
   module Backends
     class MIDIBackend
+      include MIDIMessageSupport
+
       attr_reader :channel
 
       def initialize(device_name: nil, channel: 0, output: nil, schedule: false)
@@ -21,32 +25,7 @@ module Cyclotone
         raise ConnectionError, error.message
       end
 
-      def messages_for(event)
-        values = event.value.is_a?(Hash) ? event.value : { note: event.value }
-        note = values[:note]
-        return control_change_messages(values) if values.key?(:cc)
-        return [] if note.nil?
-
-        velocity = ((values[:velocity] || values[:gain] || 1.0).to_f * 127).clamp(0, 127).to_i
-        active_channel = (values[:channel] || channel).to_i
-        sustain = values[:sustain] || event.duration || 1
-
-        [
-          { type: :note_on, channel: active_channel, note: note.to_i, velocity: velocity },
-          { type: :note_off, channel: active_channel, note: note.to_i, velocity: 0, delay: sustain.to_f }
-        ]
-      end
-
       private
-
-      def control_change_messages(values)
-        cc_values = values[:cc].is_a?(Hash) ? values[:cc] : {}
-        active_channel = (values[:channel] || channel).to_i
-
-        cc_values.map do |controller, amount|
-          { type: :cc, channel: active_channel, controller: controller.to_i, value: amount.to_i }
-        end
-      end
 
       def emit(message)
         if @output.respond_to?(:call)

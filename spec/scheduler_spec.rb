@@ -14,4 +14,14 @@ RSpec.describe Cyclotone::Scheduler do
     expect(events).not_to be_empty
     expect(events.first[:event].value).to include(s: "bd")
   end
+
+  it "renders exact durations without lookahead spill" do
+    scheduler = described_class.new(cps: 1, backend: backend, lookahead: 0.5, interval: 0.01)
+    scheduler.update_pattern(:d1, Cyclotone::Controls.s("bd hh"))
+
+    scheduler.render(duration: 0.25)
+
+    expect(events.length).to eq(1)
+    expect(events.first[:event].value).to include(s: "bd")
+  end
 end
