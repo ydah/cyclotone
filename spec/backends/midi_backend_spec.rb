@@ -49,4 +49,32 @@ RSpec.describe Cyclotone::Backends::MIDIBackend do
     expect(described_class.new.instance_variable_get(:@output)&.name).to eq(first.name)
     expect(described_class.new(device_name: "Missing").instance_variable_get(:@output)).to be_nil
   end
+
+  it "sends raw MIDI bytes to UniMIDI-style outputs" do
+    sent = []
+    device = Class.new do
+      def initialize(sent)
+        @sent = sent
+      end
+
+      def open
+        yield self
+      end
+
+      def puts(bytes)
+        @sent << bytes
+      end
+    end.new(sent)
+
+    backend = described_class.new(output: device)
+    event = Cyclotone::Event.new(
+      whole: Cyclotone::TimeSpan.new(0, 1),
+      part: Cyclotone::TimeSpan.new(0, 1),
+      value: { note: 60, velocity: 100, sustain: 0.25, channel: 1 }
+    )
+
+    backend.send_event(event, at: 10.0)
+
+    expect(sent).to include([0x91, 60, 100], [0x81, 60, 0])
+  end
 end

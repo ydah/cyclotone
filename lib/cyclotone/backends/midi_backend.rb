@@ -43,10 +43,43 @@ module Cyclotone
       private
 
       def emit(message)
+        bytes = bytes_for(message)
+
         if @output.respond_to?(:call)
           @output.call(message)
+        elsif midi_device?(@output)
+          send_to_device(@output, bytes)
         elsif @output.respond_to?(:puts)
           @output.puts(message)
+        end
+      end
+
+      def send_to_device(device, bytes)
+        if device.respond_to?(:open)
+          device.open do |port|
+            (port || device).puts(bytes)
+          end
+        else
+          device.puts(bytes)
+        end
+      end
+
+      def midi_device?(output)
+        output.respond_to?(:puts) && (output.respond_to?(:open) || !output.is_a?(IO))
+      end
+
+      def bytes_for(message)
+        channel = normalize_channel(message[:channel] || channel)
+
+        case message[:type]
+        when :note_on
+          [0x90 | channel, normalize_data_byte(message[:note]), normalize_velocity(message[:velocity])]
+        when :note_off
+          [0x80 | channel, normalize_data_byte(message[:note]), normalize_velocity(message[:velocity])]
+        when :cc
+          [0xB0 | channel, normalize_data_byte(message[:controller]), normalize_controller_value(message[:value])]
+        else
+          []
         end
       end
 
