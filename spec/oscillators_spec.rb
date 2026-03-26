@@ -12,6 +12,13 @@ RSpec.describe Cyclotone::Oscillators do
     expect(value).to be_within(0.01).of(15.0)
   end
 
+  it "smooths discrete patterns with linear interpolation" do
+    pattern = Cyclotone::Pattern.fastcat([Cyclotone::Pattern.pure(0), Cyclotone::Pattern.pure(1)])
+    value = described_class.smooth(pattern).query_point(Rational(1, 2))
+
+    expect(value).to be_within(0.001).of(0.5)
+  end
+
   it "segments continuous patterns into discrete steps" do
     values = described_class.saw.segment(4).query_cycle(0).map(&:value)
 

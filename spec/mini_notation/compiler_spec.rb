@@ -13,4 +13,13 @@ RSpec.describe Cyclotone::MiniNotation::Compiler do
 
     expect(pattern.query_cycle(0).map(&:value)).to eq(%w[bd bd bd])
   end
+
+  it "compiles polymetric notation using the declared pulse count" do
+    pattern = Cyclotone::Pattern.mn("{bd sd, hh hh hh}%2")
+    values = pattern.query_cycle(0).map(&:value)
+
+    expect(values.count("bd")).to eq(1)
+    expect(values.count("sd")).to eq(1)
+    expect(values.count("hh")).to eq(2)
+  end
 end

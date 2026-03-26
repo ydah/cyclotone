@@ -64,12 +64,10 @@ module Cyclotone
 
     def smooth(pattern)
       source = Pattern.ensure_pattern(pattern)
+      return source if source.continuous?
 
       Pattern.continuous do |time|
-        current = source.query_point(time)
-        next current unless current.nil?
-
-        source.query_point(time - Pattern::SAMPLE_EPSILON)
+        interpolate(source, Pattern.to_rational(time))
       end
     end
 
@@ -82,5 +80,52 @@ module Cyclotone
       cycle_position(time) * Math::PI * 2.0
     end
     private_class_method :phase
+
+    def interpolate(source, time)
+      anchors = anchors_for(source, time)
+      return source.query_point(time) if anchors.empty?
+
+      left = anchors.reverse.find { |anchor| anchor[:time] <= time } || anchors.first
+      right = anchors.find { |anchor| anchor[:time] >= time } || anchors.last
+      return left[:value] if left[:time] == right[:time]
+
+      amount = (time - left[:time]).to_f / (right[:time] - left[:time]).to_f
+      interpolate_value(left[:value], right[:value], amount)
+    end
+    private_class_method :interpolate
+
+    def anchors_for(source, time)
+      window = TimeSpan.new(time.floor - 1, time.floor + 2)
+
+      source.query_span(window).each_with_object([]) do |event, anchors|
+        next if event.part.duration.zero?
+
+        anchors << { time: event.part.midpoint, value: event.value }
+      end.sort_by { |anchor| anchor[:time] }
+    end
+    private_class_method :anchors_for
+
+    def interpolate_value(left, right, amount)
+      if left.is_a?(Numeric) && right.is_a?(Numeric)
+        left.to_f + ((right.to_f - left.to_f) * amount)
+      elsif left.is_a?(Hash) && right.is_a?(Hash)
+        interpolate_hash(left, right, amount)
+      else
+        amount >= 0.5 ? right : left
+      end
+    end
+    private_class_method :interpolate_value
+
+    def interpolate_hash(left, right, amount)
+      (left.keys | right.keys).each_with_object({}) do |key, result|
+        result[key] =
+          if left.key?(key) && right.key?(key)
+            interpolate_value(left[key], right[key], amount)
+          else
+            amount >= 0.5 ? right.fetch(key, left[key]) : left.fetch(key, right[key])
+          end
+      end
+    end
+    private_class_method :interpolate_hash
   end
 end

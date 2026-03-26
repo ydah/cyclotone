@@ -67,6 +67,25 @@ RSpec.describe Cyclotone::MiniNotation::Parser do
       )
     )
     expect(parser.parse("{bd sd, cp hh}")).to be_a(Cyclotone::MiniNotation::AST::Polymetric)
+    expect(parser.parse("{bd sd, cp hh}%3")).to eq(
+      Cyclotone::MiniNotation::AST::Polymetric.new(
+        patterns: [
+          Cyclotone::MiniNotation::AST::Sequence.new(
+            elements: [
+              Cyclotone::MiniNotation::AST::Atom.new(value: "bd"),
+              Cyclotone::MiniNotation::AST::Atom.new(value: "sd")
+            ]
+          ),
+          Cyclotone::MiniNotation::AST::Sequence.new(
+            elements: [
+              Cyclotone::MiniNotation::AST::Atom.new(value: "cp"),
+              Cyclotone::MiniNotation::AST::Atom.new(value: "hh")
+            ]
+          )
+        ],
+        steps: 3
+      )
+    )
   end
 
   it "raises a parse error for invalid input" do

@@ -30,7 +30,7 @@ module Cyclotone
         when AST::Euclidean
           compile_euclidean(node)
         when AST::Polymetric
-          Pattern.stack(node.patterns.map { |pattern| compile(pattern) })
+          compile_polymetric(node)
         else
           raise ArgumentError, "unsupported AST node #{node.class}"
         end
@@ -74,6 +74,41 @@ module Cyclotone
             [1, gate ? compile(node.pattern) : Pattern.silence]
           end
         )
+      end
+
+      def compile_polymetric(node)
+        base_steps = (node.steps || step_count(node.patterns.first)).to_i
+        base_steps = 1 if base_steps <= 0
+
+        Pattern.stack(
+          node.patterns.map do |pattern|
+            pattern_steps = [step_count(pattern), 1].max
+            compile(pattern).slow(Rational(pattern_steps, base_steps))
+          end
+        )
+      end
+
+      def step_count(node)
+        case node
+        when AST::Atom, AST::Rest
+          1
+        when AST::Sequence
+          node.elements.sum { |element| step_count(element) }
+        when AST::Stack, AST::Alternating, AST::Choice
+          node.patterns.map { |pattern| step_count(pattern) }.max || 1
+        when AST::Repeat, AST::Replicate
+          step_count(node.pattern) * node.count
+        when AST::Slow, AST::Degrade
+          step_count(node.pattern)
+        when AST::Elongate
+          step_count(node.pattern) * node.amount.to_i
+        when AST::Euclidean
+          [node.steps, 1].max * step_count(node.pattern)
+        when AST::Polymetric
+          node.steps || step_count(node.patterns.first)
+        else
+          1
+        end
       end
     end
   end
