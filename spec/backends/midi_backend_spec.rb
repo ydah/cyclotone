@@ -32,4 +32,21 @@ RSpec.describe Cyclotone::Backends::MIDIBackend do
       { type: :cc, channel: 2, controller: 74, value: 90 }
     ])
   end
+
+  it "lists and selects available MIDI outputs when UniMIDI is present" do
+    first = Struct.new(:name).new("Device A")
+    second = Struct.new(:name).new("Device B")
+    unimidi_output = Class.new do
+      def self.all
+        [Struct.new(:name).new("Device A"), Struct.new(:name).new("Device B")]
+      end
+    end
+    stub_const("UniMIDI", Module.new)
+    stub_const("UniMIDI::Output", unimidi_output)
+
+    expect(described_class.available_outputs.map(&:name)).to eq(["Device A", "Device B"])
+    expect(described_class.new(device_name: "Device B").instance_variable_get(:@output)&.name).to eq("Device B")
+    expect(described_class.new.instance_variable_get(:@output)&.name).to eq(first.name)
+    expect(described_class.new(device_name: "Missing").instance_variable_get(:@output)).to be_nil
+  end
 end

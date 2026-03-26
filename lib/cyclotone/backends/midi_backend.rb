@@ -2,6 +2,11 @@
 
 require_relative "midi_message_support"
 
+begin
+  require "unimidi"
+rescue LoadError
+end
+
 module Cyclotone
   module Backends
     class MIDIBackend
@@ -13,6 +18,16 @@ module Cyclotone
         @channel = channel.to_i
         @output = output || detect_output(device_name)
         @schedule = schedule
+      end
+
+      class << self
+        def available_outputs
+          return [] unless defined?(UniMIDI)
+
+          UniMIDI::Output.all
+        rescue StandardError
+          []
+        end
       end
 
       def send_event(event, at: Time.now.to_f, **_options)
@@ -55,14 +70,11 @@ module Cyclotone
       end
 
       def detect_output(device_name)
-        return nil unless defined?(UniMIDI)
-
-        devices = UniMIDI::Output.all
+        devices = self.class.available_outputs
+        return nil if devices.empty?
         return devices.first if device_name.nil?
 
         devices.find { |device| device.name == device_name }
-      rescue StandardError
-        nil
       end
     end
   end
