@@ -67,7 +67,7 @@ d3 s("hh*8").every(4) { |pattern| pattern.fast(2) }.sometimes { |pattern| patter
 Start an interactive session with the DSL preloaded:
 
 ```bash
-bundle exec ruby exe/cyclotone
+bundle exec bin/cyclotone
 ```
 
 ### Local MIDI file output
