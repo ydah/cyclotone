@@ -20,11 +20,11 @@ module Cyclotone
     end
 
     def d(slot_id, pattern)
-      assign(normalize_slot_id(slot_id), pattern)
+      assign(normalize_d_slot_id(slot_id), pattern)
     end
 
     def p(name, pattern)
-      assign(name.to_sym, pattern)
+      assign(normalize_slot_reference(name), pattern)
     end
 
     def hush
@@ -33,22 +33,22 @@ module Cyclotone
     end
 
     def solo(id)
-      @soloed << normalize_slot_id(id)
+      @soloed << normalize_slot_reference(id)
       sync_scheduler
     end
 
     def unsolo(id)
-      @soloed.delete(normalize_slot_id(id))
+      @soloed.delete(normalize_slot_reference(id))
       sync_scheduler
     end
 
     def mute(id)
-      @muted << normalize_slot_id(id)
+      @muted << normalize_slot_reference(id)
       sync_scheduler
     end
 
     def unmute(id)
-      @muted.delete(normalize_slot_id(id))
+      @muted.delete(normalize_slot_reference(id))
       sync_scheduler
     end
 
@@ -87,7 +87,7 @@ module Cyclotone
     end
 
     def slot(slot_id)
-      @slots[normalize_slot_id(slot_id)]
+      @slots[normalize_slot_reference(slot_id)]
     end
 
     private
@@ -105,8 +105,20 @@ module Cyclotone
       Pattern.pure(pattern)
     end
 
-    def normalize_slot_id(slot_id)
-      slot_id.to_s.start_with?("d") ? slot_id.to_s.to_sym : :"d#{slot_id}"
+    def normalize_d_slot_id(slot_id)
+      raw = slot_id.to_s
+      return raw.to_sym if raw.match?(/\Ad\d+\z/)
+      return :"d#{raw}" if raw.match?(/\A\d+\z/)
+
+      :"d#{raw}"
+    end
+
+    def normalize_slot_reference(slot_id)
+      raw = slot_id.to_s
+      return raw.to_sym if raw.match?(/\Ad\d+\z/)
+      return :"d#{raw}" if raw.match?(/\A\d+\z/)
+
+      raw.to_sym
     end
 
     def sync_scheduler

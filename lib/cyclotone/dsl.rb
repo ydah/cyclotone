@@ -54,8 +54,56 @@ module Cyclotone
       stream.xfade_in(id, cycles, pattern)
     end
 
+    def clutch(id, pattern)
+      stream.clutch(id, pattern)
+    end
+
+    def clutch_in(id, cycles, pattern)
+      stream.clutch_in(id, cycles, pattern)
+    end
+
+    def interpolate(id, pattern)
+      stream.interpolate(id, pattern)
+    end
+
+    def interpolate_in(id, cycles, pattern)
+      stream.interpolate_in(id, cycles, pattern)
+    end
+
     def jump(id, pattern)
       stream.jump(id, pattern)
+    end
+
+    def jump_in(id, cycles, pattern)
+      stream.jump_in(id, cycles, pattern)
+    end
+
+    def anticipate(id, pattern)
+      stream.anticipate(id, pattern)
+    end
+
+    def solo(id)
+      stream.solo(id)
+    end
+
+    def unsolo(id)
+      stream.unsolo(id)
+    end
+
+    def mute(id)
+      stream.mute(id)
+    end
+
+    def unmute(id)
+      stream.unmute(id)
+    end
+
+    def fade_in(cycles)
+      stream.fade_in(cycles)
+    end
+
+    def fade_out(cycles)
+      stream.fade_out(cycles)
     end
 
     def start
@@ -72,6 +120,10 @@ module Cyclotone
 
     def scale(name, pattern, root: 0)
       Harmony.scale(name, pattern, root: root)
+    end
+
+    def running?
+      stream.running?
     end
   end
 end

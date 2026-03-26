@@ -13,4 +13,12 @@ RSpec.describe Cyclotone::DSL do
     pattern = Cyclotone::Stream.instance.slot(:d1)
     expect(pattern.query_cycle(0).first.value).to eq({ s: "bd", gain: 0.7 })
   end
+
+  it "exposes named-slot and transition helpers" do
+    context.p(:lead, context.s("bd"))
+    context.jump_in(:lead, 1, context.s("sd"))
+
+    pattern = Cyclotone::Stream.instance.slot(:lead)
+    expect(pattern).to be_a(Cyclotone::Pattern)
+  end
 end

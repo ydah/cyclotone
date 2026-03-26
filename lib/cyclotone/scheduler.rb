@@ -10,11 +10,12 @@ module Cyclotone
 
     attr_reader :backend, :cps, :lookahead, :interval
 
-    def initialize(cps: DEFAULT_CPS, backend:, lookahead: LOOKAHEAD, interval: INTERVAL)
+    def initialize(cps: DEFAULT_CPS, backend:, lookahead: LOOKAHEAD, interval: INTERVAL, logger: nil)
       @backend = backend
       @cps = cps.to_f
       @lookahead = lookahead
       @interval = interval
+      @logger = logger
       @mutex = Mutex.new
       @patterns = {}
       @sent = {}
@@ -31,7 +32,12 @@ module Cyclotone
       @running = true
       @thread = Thread.new do
         while @running
-          tick
+          begin
+            tick
+          rescue StandardError => error
+            log_runtime_error(error)
+          end
+
           sleep(@interval)
         end
       end
@@ -57,7 +63,17 @@ module Cyclotone
     end
 
     def setcps(value)
-      @mutex.synchronize { @cps = value.to_f }
+      now = monotonic_time
+      wall_now = Time.now.to_f
+
+      @mutex.synchronize do
+        current_cycle = time_to_cycle(now, @cps, @start_cycle, @start_monotonic)
+
+        @start_cycle = current_cycle
+        @start_monotonic = now
+        @start_wall_time = wall_now
+        @cps = value.to_f
+      end
     end
 
     def reset_cycles
@@ -76,6 +92,10 @@ module Cyclotone
 
     def backend=(backend)
       @mutex.synchronize { @backend = backend }
+    end
+
+    def current_cycle(now = monotonic_time)
+      @mutex.synchronize { time_to_cycle(now, @cps, @start_cycle, @start_monotonic) }
     end
 
     def running?
@@ -129,6 +149,8 @@ module Cyclotone
           absolute_time = state[:start_wall_time] + ((event.onset.to_f - state[:start_cycle]) / state[:cps])
           state[:backend].send_event(event, at: absolute_time)
           @sent[key] = true
+        rescue StandardError => error
+          log_runtime_error(error)
         end
       end
 
@@ -137,6 +159,10 @@ module Cyclotone
 
     def time_to_cycle(time, cps_value, start_cycle, start_monotonic)
       start_cycle + ((time - start_monotonic) * cps_value)
+    end
+
+    def log_runtime_error(error)
+      @logger&.call("[Cyclotone::Scheduler] #{error.class}: #{error.message}")
     end
   end
 end

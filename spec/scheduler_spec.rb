@@ -24,4 +24,22 @@ RSpec.describe Cyclotone::Scheduler do
     expect(events.length).to eq(1)
     expect(events.first[:event].value).to include(s: "bd")
   end
+
+  it "keeps the logical cycle continuous when cps changes" do
+    scheduler = described_class.new(cps: 1, backend: backend, lookahead: 0.5, interval: 0.01)
+    allow(Time).to receive(:now).and_return(Time.at(1_000))
+    allow(scheduler).to receive(:monotonic_time).and_return(100.0)
+
+    scheduler.set_cycle(0)
+
+    allow(Time).to receive(:now).and_return(Time.at(1_000.5))
+    allow(scheduler).to receive(:monotonic_time).and_return(100.5)
+
+    scheduler.setcps(2)
+    expect(scheduler.current_cycle).to be_within(1e-6).of(0.5)
+
+    allow(scheduler).to receive(:monotonic_time).and_return(101.0)
+
+    expect(scheduler.current_cycle).to be_within(1e-6).of(1.5)
+  end
 end
