@@ -1,19 +1,22 @@
 # Cyclotone
 
-Cyclotone is a Ruby gem for pattern-based live coding. It uses exact rational time, composes immutable event patterns, parses a Tidal-style mini-notation, and ships with transforms, control patterns, oscillators, harmony helpers, a scheduler, and a DSL for slot-based performance.
+Cyclotone is a Ruby gem for pattern-based live coding. It combines exact rational time, immutable event patterns, a compact mini-notation, and runtime tools for driving OSC or MIDI-based performance workflows.
 
-The current implementation includes:
+## Highlights
 
-- `Cyclotone::TimeSpan`
-- `Cyclotone::Event`
-- `Cyclotone::Pattern`
-- Mini-notation parsing and compilation with Euclidean rhythms
+- Exact timing with `Cyclotone::TimeSpan`
+- Immutable `Cyclotone::Event` values and composable `Cyclotone::Pattern` queries
+- Mini-notation parsing and compilation, including Euclidean rhythms
 - Pattern transforms for time, concatenation, accumulation, alteration, condition, and sample operations
-- Control factories, oscillators, harmony helpers, OSC/MIDI backends, scheduler, stream management, transitions, and a DSL/REPL entry point
+- Control factories, oscillators, and harmony helpers for building musical data
+- Scheduler, stream transitions, and a DSL for slot-based live performance
+- OSC, MIDI, and MIDI file backends
 
 ## Installation
 
-Add this line to your application's Gemfile:
+Cyclotone requires Ruby 3.1 or newer.
+
+Add it to your Gemfile:
 
 ```bash
 bundle add cyclotone
@@ -25,7 +28,9 @@ Or install it directly:
 gem install cyclotone
 ```
 
-## Usage
+## Quick Start
+
+### Query a pattern directly
 
 ```ruby
 require "cyclotone"
@@ -42,7 +47,7 @@ events.map { |event| [event.whole.to_s, event.part.to_s, event.value] }
 #    ]
 ```
 
-Top-level DSL:
+### Use the live coding DSL
 
 ```ruby
 require "cyclotone"
@@ -55,13 +60,19 @@ d2 note("0 2 4 7").scale(:minor, root: "c4").s("superpiano")
 d3 s("hh*8").every(4) { |pattern| pattern.fast(2) }.sometimes { |pattern| pattern.degrade }
 ```
 
-Open the REPL with:
+## Run It Locally
+
+### REPL
+
+Start an interactive session with the DSL preloaded:
 
 ```bash
 bundle exec ruby exe/cyclotone
 ```
 
-To generate a local MIDI file for quick verification:
+### Local MIDI file output
+
+Generate a MIDI file without needing a live OSC target:
 
 ```bash
 bundle exec ruby examples/midi_output.rb
@@ -69,7 +80,21 @@ bundle exec ruby examples/midi_output.rb
 
 This writes `tmp/cyclotone_demo.mid`, which you can import into a DAW or any MIDI-capable player.
 
+### OSC / SuperDirt examples
+
+If you already have SuperCollider and SuperDirt running, try one of the example scripts:
+
+```bash
+bundle exec ruby examples/basic_beat.rb
+bundle exec ruby examples/euclidean_rhythms.rb
+bundle exec ruby examples/live_coding_session.rb
+```
+
+The OSC examples read `CYCLOTONE_OSC_HOST` and `CYCLOTONE_OSC_PORT` when you need to override the default target.
+
 ## Development
+
+Install dependencies, run the test suite, and build the gem:
 
 ```bash
 bundle install
@@ -77,7 +102,7 @@ bundle exec rspec
 gem build cyclotone.gemspec
 ```
 
-To install the gem locally for manual experiments:
+For local manual experiments, install the gem into your current Ruby environment:
 
 ```bash
 bundle exec rake install
@@ -85,8 +110,8 @@ bundle exec rake install
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/ydah/cyclotone.
+Bug reports and pull requests are welcome at https://github.com/ydah/cyclotone.
 
 ## License
 
-The gem is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).
+Cyclotone is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).
