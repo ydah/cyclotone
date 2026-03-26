@@ -147,7 +147,7 @@ module Cyclotone
           next if @sent[key]
 
           absolute_time = state[:start_wall_time] + ((event.onset.to_f - state[:start_cycle]) / state[:cps])
-          state[:backend].send_event(event, at: absolute_time)
+          state[:backend].send_event(event, at: absolute_time, cps: state[:cps])
           @sent[key] = true
         rescue StandardError => error
           log_runtime_error(error)

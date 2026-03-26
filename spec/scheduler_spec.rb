@@ -2,7 +2,12 @@
 
 RSpec.describe Cyclotone::Scheduler do
   let(:events) { [] }
-  let(:backend) { Class.new { define_method(:initialize) { |events| @events = events }; define_method(:send_event) { |event, at:| @events << { event: event, at: at } } }.new(events) }
+  let(:backend) do
+    Class.new do
+      define_method(:initialize) { |events| @events = events }
+      define_method(:send_event) { |event, at:, **options| @events << { event: event, at: at, options: options } }
+    end.new(events)
+  end
 
   it "schedules lookahead events for registered patterns" do
     scheduler = described_class.new(cps: 1, backend: backend, lookahead: 0.5, interval: 0.01)

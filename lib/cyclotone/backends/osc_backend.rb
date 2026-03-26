@@ -7,41 +7,81 @@ module Cyclotone
     class OSCBackend
       attr_reader :host, :port
 
-      def initialize(host: "127.0.0.1", port: 57_120, socket: nil)
+      def initialize(host: "127.0.0.1", port: 57_120, socket: nil, socket_factory: nil, retries: 1)
         @host = host
         @port = port
-        @socket = socket || UDPSocket.new
+        @socket_factory = socket_factory || proc { UDPSocket.new }
+        @retries = retries.to_i
+        @socket = socket || build_socket
       rescue StandardError => error
         raise ConnectionError, error.message
       end
 
-      def payload_for(event, at:)
+      def payload_for(event, at:, cps: nil)
         values = event.value.is_a?(Hash) ? event.value : { value: event.value }
 
         [
           "when", at.to_f,
-          "onset", event.onset&.to_f,
-          "offset", event.offset&.to_f
+          "onset", absolute_onset(event, at),
+          "offset", absolute_offset(event, at, cps)
         ].compact + flatten_hash(values)
       end
 
-      def build_message(event, at:)
-        encode_message("/dirt/play", payload_for(event, at: at))
+      def build_message(event, at:, cps: nil)
+        encode_message("/dirt/play", payload_for(event, at: at, cps: cps))
       end
 
-      def send_event(event, at: Time.now.to_f)
-        @socket.send(build_message(event, at: at), 0, host, port)
+      def send_event(event, at: Time.now.to_f, cps: nil)
+        with_retry do
+          @socket.send(build_message(event, at: at, cps: cps), 0, host, port)
+        end
       rescue StandardError => error
         raise ConnectionError, error.message
       end
 
       private
 
+      def with_retry
+        attempts_remaining = @retries
+
+        begin
+          yield
+        rescue StandardError
+          raise if attempts_remaining <= 0
+
+          attempts_remaining -= 1
+          reconnect!
+          retry
+        end
+      end
+
+      def reconnect!
+        @socket.close if @socket.respond_to?(:close)
+        @socket = build_socket
+      end
+
+      def build_socket
+        @socket_factory.call
+      end
+
       def flatten_hash(hash)
         hash.each_with_object([]) do |(key, value), payload|
           payload << key.to_s
           payload << value
         end
+      end
+
+      def absolute_onset(event, at)
+        return nil unless event.onset
+
+        at.to_f
+      end
+
+      def absolute_offset(event, at, cps)
+        return nil unless event.offset
+        return event.offset.to_f if cps.nil? || event.duration.nil?
+
+        at.to_f + (event.duration.to_f / cps.to_f)
       end
 
       def encode_message(address, arguments)

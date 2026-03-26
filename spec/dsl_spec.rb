@@ -21,4 +21,20 @@ RSpec.describe Cyclotone::DSL do
     pattern = Cyclotone::Stream.instance.slot(:lead)
     expect(pattern).to be_a(Cyclotone::Pattern)
   end
+
+  it "exposes trigger helpers" do
+    stream = Cyclotone::Stream.instance
+
+    allow(stream).to receive(:trigger)
+    allow(stream).to receive(:qtrigger)
+    allow(stream).to receive(:mtrigger)
+
+    context.trigger
+    context.qtrigger
+    context.mtrigger(4)
+
+    expect(stream).to have_received(:trigger)
+    expect(stream).to have_received(:qtrigger)
+    expect(stream).to have_received(:mtrigger).with(4)
+  end
 end

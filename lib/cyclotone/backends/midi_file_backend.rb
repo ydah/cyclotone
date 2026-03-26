@@ -34,7 +34,7 @@ module Cyclotone
         self
       end
 
-      def send_event(event, at: Time.now.to_f)
+      def send_event(event, at: Time.now.to_f, **_options)
         capture_time = at.to_f
         @origin_time ||= capture_time
 

@@ -5,8 +5,9 @@ RSpec.describe Cyclotone::Stream do
 
   after do
     stream.hush
-    stream.unsolo(:d1)
-    stream.unmute(:d1)
+    stream.instance_variable_get(:@slots).clear
+    stream.instance_variable_get(:@soloed).clear
+    stream.instance_variable_get(:@muted).clear
   end
 
   it "stores patterns in preset slots" do
@@ -30,11 +31,41 @@ RSpec.describe Cyclotone::Stream do
     expect(stream.send(:active_slots)).to have_key(:lead)
   end
 
+  it "can solo and unsolo a slot" do
+    stream.d(1, "bd")
+    stream.d(2, "sd")
+
+    stream.solo(:d1)
+
+    expect(stream.send(:active_slots).keys).to eq([:d1])
+
+    stream.unsolo(:d1)
+
+    expect(stream.send(:active_slots).keys).to contain_exactly(:d1, :d2)
+  end
+
   it "can mute and hush slots" do
     stream.d(1, "bd")
     stream.mute(:d1)
     stream.hush
 
     expect(stream.slot(:d1).query_cycle(0)).to eq([])
+  end
+
+  it "supports trigger quantization helpers" do
+    scheduler = stream.scheduler
+
+    allow(scheduler).to receive(:current_cycle).and_return(1.25, 1.25, 1.25)
+    allow(scheduler).to receive(:cps).and_return(2.0)
+    allow(scheduler).to receive(:interval).and_return(0.5)
+    allow(stream).to receive(:sleep)
+
+    stream.trigger
+    stream.qtrigger
+    stream.mtrigger(4)
+
+    expect(stream).to have_received(:sleep).with(0.5)
+    expect(stream).to have_received(:sleep).with(0.375)
+    expect(stream).to have_received(:sleep).with(1.375)
   end
 end

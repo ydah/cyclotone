@@ -46,6 +46,18 @@ module Cyclotone
       stream.set_cycle(value)
     end
 
+    def trigger
+      stream.trigger
+    end
+
+    def qtrigger
+      stream.qtrigger
+    end
+
+    def mtrigger(period)
+      stream.mtrigger(period)
+    end
+
     def xfade(id, pattern)
       stream.xfade(id, pattern)
     end

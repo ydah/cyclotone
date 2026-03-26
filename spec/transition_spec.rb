@@ -5,9 +5,9 @@ RSpec.describe Cyclotone::Stream do
 
   after do
     stream.hush
-    stream.instance_variable_get(:@slots).delete(:lead)
-    stream.unsolo(:d1)
-    stream.unmute(:d1)
+    stream.instance_variable_get(:@slots).clear
+    stream.instance_variable_get(:@soloed).clear
+    stream.instance_variable_get(:@muted).clear
   end
 
   it "applies jump_in relative to the current scheduler cycle" do

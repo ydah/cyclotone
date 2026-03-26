@@ -15,4 +15,8 @@ RSpec.describe Cyclotone::Controls do
 
     expect(values).to eq([{ s: "bd", gain: 0.5 }])
   end
+
+  it "raises for unknown control names" do
+    expect { described_class.control(:unknown, "bd") }.to raise_error(Cyclotone::InvalidControlError)
+  end
 end

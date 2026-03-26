@@ -86,6 +86,24 @@ module Cyclotone
       @scheduler.running?
     end
 
+    def trigger
+      wait_until_cycle(@scheduler.current_cycle + (@scheduler.interval * @scheduler.cps))
+    end
+
+    def qtrigger
+      wait_until_cycle(@scheduler.current_cycle.ceil)
+    end
+
+    def mtrigger(period)
+      normalized_period = [period.to_i, 1].max
+      current_cycle = @scheduler.current_cycle
+      next_cycle = current_cycle.ceil
+      remainder = next_cycle % normalized_period
+      target_cycle = remainder.zero? ? next_cycle : next_cycle + (normalized_period - remainder)
+
+      wait_until_cycle(target_cycle)
+    end
+
     def slot(slot_id)
       @slots[normalize_slot_reference(slot_id)]
     end
@@ -145,6 +163,13 @@ module Cyclotone
       @slots.keys - active_slots.keys
     end
 
+    def wait_until_cycle(target_cycle)
+      cycles_remaining = target_cycle.to_f - @scheduler.current_cycle
+      seconds = cycles_remaining / @scheduler.cps
+      sleep(seconds) if seconds.positive?
+      self
+    end
+
     class NullBackend
       attr_reader :events
 
@@ -152,8 +177,8 @@ module Cyclotone
         @events = []
       end
 
-      def send_event(event, at:)
-        @events << { event: event, at: at }
+      def send_event(event, at:, **options)
+        @events << { event: event, at: at, options: options }
       end
     end
   end
