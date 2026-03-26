@@ -50,12 +50,15 @@ module Cyclotone
       end
 
       def chunk(count, &block)
-        selected = Support::Deterministic.int(count, :chunk, object_id)
-        pieces = Array.new(count) do |index|
-          index == selected ? zoom(Rational(index, count), Rational(index + 1, count)).then(&block) : zoom(Rational(index, count), Rational(index + 1, count))
-        end
+        Pattern.new do |span|
+          selected = span.cycle_number % count
+          pieces = Array.new(count) do |index|
+            segment = zoom(Rational(index, count), Rational(index + 1, count))
+            index == selected ? block.call(segment) : segment
+          end
 
-        Pattern.fastcat(pieces)
+          Pattern.fastcat(pieces).query_span(span)
+        end
       end
 
       def scramble(count)
