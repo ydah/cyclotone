@@ -99,6 +99,7 @@ Install dependencies, run the test suite, and build the gem:
 ```bash
 bundle install
 bundle exec rspec
+bundle exec rake yard
 gem build cyclotone.gemspec
 ```
 
@@ -107,6 +108,8 @@ For local manual experiments, install the gem into your current Ruby environment
 ```bash
 bundle exec rake install
 ```
+
+YARD output is written to `doc/yard`.
 
 ## Contributing
 
