@@ -76,9 +76,10 @@ Generate a MIDI file without needing a live OSC target:
 
 ```bash
 bundle exec ruby examples/midi_output.rb
+bundle exec ruby examples/chill_midi_output.rb
 ```
 
-This writes `tmp/cyclotone_demo.mid`, which you can import into a DAW or any MIDI-capable player.
+These write `tmp/cyclotone_demo.mid` and `tmp/cyclotone_chill.mid`, which you can import into a DAW or any MIDI-capable player.
 
 ### OSC / SuperDirt examples
 
