@@ -103,15 +103,16 @@ module Cyclotone
       end
     end
 
-    def smooth(pattern)
+    def smooth(pattern, interpolator: nil, &block)
       source = Pattern.ensure_pattern(pattern)
       return source if source.continuous?
 
+      interpolation = block || interpolator
       cache = {}
       Pattern.continuous do |time|
         rational_time = Pattern.to_rational(time)
         cache.fetch(rational_time) do
-          cache[rational_time] = interpolate(source, rational_time)
+          cache[rational_time] = interpolate(source, rational_time, interpolation)
           cache.shift if cache.length > 256
           cache[rational_time]
         end
@@ -166,7 +167,7 @@ module Cyclotone
       raise ArgumentError, "invalid #{label}: #{error.message}"
     end
 
-    def interpolate(source, time)
+    def interpolate(source, time, interpolation)
       anchors = anchors_for(source, time)
       return source.query_point(time) if anchors.empty?
 
@@ -175,7 +176,7 @@ module Cyclotone
       return left[:value] if left[:time] == right[:time]
 
       amount = (time - left[:time]).to_f / (right[:time] - left[:time])
-      interpolate_value(left[:value], right[:value], amount)
+      interpolate_value(left[:value], right[:value], amount, interpolation)
     end
     private_class_method :interpolate
 
@@ -190,22 +191,24 @@ module Cyclotone
     end
     private_class_method :anchors_for
 
-    def interpolate_value(left, right, amount)
+    def interpolate_value(left, right, amount, interpolation = nil)
       if left.is_a?(Numeric) && right.is_a?(Numeric)
         left.to_f + ((right.to_f - left.to_f) * amount)
       elsif left.is_a?(Hash) && right.is_a?(Hash)
-        interpolate_hash(left, right, amount)
+        interpolate_hash(left, right, amount, interpolation)
+      elsif interpolation
+        interpolation.call(left, right, amount)
       else
         amount >= 0.5 ? right : left
       end
     end
     private_class_method :interpolate_value
 
-    def interpolate_hash(left, right, amount)
+    def interpolate_hash(left, right, amount, interpolation)
       (left.keys | right.keys).to_h do |key|
         value =
           if left.key?(key) && right.key?(key)
-            interpolate_value(left[key], right[key], amount)
+            interpolate_value(left[key], right[key], amount, interpolation)
           else
             amount >= 0.5 ? right.fetch(key, left[key]) : left.fetch(key, right[key])
           end

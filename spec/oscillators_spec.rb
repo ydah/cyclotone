@@ -19,6 +19,18 @@ RSpec.describe Cyclotone::Oscillators do
     expect(value).to be_within(0.001).of(0.5)
   end
 
+  it "supports custom smoothing for non-numeric values" do
+    pattern = Cyclotone::Pattern.fastcat([
+      Cyclotone::Pattern.pure("closed"),
+      Cyclotone::Pattern.pure("open")
+    ])
+    smoothed = described_class.smooth(pattern) do |left, right, amount|
+      "#{left}:#{right}:#{amount.round(2)}"
+    end
+
+    expect(smoothed.query_point(Rational(1, 2))).to eq("closed:open:0.5")
+  end
+
   it "segments continuous patterns into discrete steps" do
     values = described_class.saw.segment(4).query_cycle(0).map(&:value)
 
