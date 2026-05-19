@@ -61,6 +61,9 @@ RSpec.describe Cyclotone::Stream do
 
     stream.hush(mode: :clear)
     expect(stream.slot(:d1)).to be_nil
+
+    stream.d(1, "bd")
+    expect(stream.send(:active_slots)).to have_key(:d1)
   end
 
   it "supports trigger quantization helpers" do

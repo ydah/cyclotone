@@ -85,6 +85,15 @@ RSpec.describe Cyclotone::Stream do
     expect(value).to include(value: "bd", gain: be_between(0.0, 1.0))
   end
 
+  it "preserves explicit zero gain in envelopes" do
+    stream.reset_cycles
+    stream.p(:lead, Cyclotone::Controls.s("bd").gain(0.0))
+
+    stream.fade_out(2)
+
+    expect(stream.slot(:lead).query_cycle(0).first.value[:gain]).to eq(0.0)
+  end
+
   it "simplifies completed transition wrappers to their replacements" do
     stream.reset_cycles
     stream.set_cycle(0)

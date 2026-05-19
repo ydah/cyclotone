@@ -49,6 +49,8 @@ module Cyclotone
         @slots.clear
         @slot_options.clear
         @transitions.clear
+        @muted.clear
+        @soloed.clear
       else
         raise ArgumentError, "unknown hush mode #{mode}"
       end
