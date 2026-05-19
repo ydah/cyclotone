@@ -128,6 +128,15 @@ RSpec.describe Cyclotone::Scheduler do
     expect(capture_backend.calls.map(&:first)).to eq(%i[begin_capture send_event end_capture write])
   end
 
+  it "uses a logical origin for offline render timestamps" do
+    scheduler = described_class.new(cps: 2, backend: backend)
+    scheduler.update_pattern(:d1, Cyclotone::Controls.s("bd sd"))
+
+    scheduler.render(duration: 0.5, at: 12.0)
+
+    expect(events.map { |entry| entry[:at] }).to eq([12.0, 12.25])
+  end
+
   it "supports injected clocks for deterministic scheduling" do
     clock = Class.new do
       attr_accessor :monotonic, :wall

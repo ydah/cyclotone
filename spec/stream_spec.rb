@@ -69,6 +69,7 @@ RSpec.describe Cyclotone::Stream do
     allow(scheduler).to receive(:current_cycle).and_return(1.25, 1.25, 1.25)
     allow(scheduler).to receive(:cps).and_return(2.0)
     allow(scheduler).to receive(:interval).and_return(0.5)
+    allow(scheduler).to receive(:running?).and_return(true)
     allow(stream).to receive(:sleep)
 
     stream.trigger
@@ -78,6 +79,18 @@ RSpec.describe Cyclotone::Stream do
     expect(stream).to have_received(:sleep).with(0.5)
     expect(stream).to have_received(:sleep).with(0.375)
     expect(stream).to have_received(:sleep).with(1.375)
+  end
+
+  it "does not wait for trigger helpers while the scheduler is stopped" do
+    scheduler = stream.scheduler
+    allow(scheduler).to receive(:running?).and_return(false)
+    allow(stream).to receive(:sleep)
+
+    stream.trigger
+    stream.qtrigger
+    stream.mtrigger(4)
+
+    expect(stream).not_to have_received(:sleep)
   end
 
   it "can create independent stream instances" do

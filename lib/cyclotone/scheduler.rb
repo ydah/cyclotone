@@ -167,11 +167,11 @@ module Cyclotone
       @mutex.synchronize { @running }
     end
 
-    def render(duration:)
+    def render(duration:, at: 0.0)
       duration_value = duration.to_f
       raise ArgumentError, "render duration must be non-negative" if duration_value.negative?
 
-      state = snapshot_state
+      state = snapshot_state.merge(start_wall_time: at.to_f)
       state[:backend].begin_capture(at: state[:start_wall_time]) if state[:backend].respond_to?(:begin_capture)
 
       logical_end = state[:start_cycle] + (duration_value * state[:cps])

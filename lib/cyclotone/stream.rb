@@ -221,6 +221,8 @@ module Cyclotone
     end
 
     def wait_until_cycle(target_cycle)
+      return self unless @scheduler.running?
+
       cycles_remaining = target_cycle.to_f - @scheduler.current_cycle
       seconds = cycles_remaining / @scheduler.cps
       sleep(seconds) if seconds.positive?

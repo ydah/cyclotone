@@ -11,6 +11,9 @@ module Cyclotone
     def includes?: (untyped time) -> bool
     def cycle_spans: (?max_cycles: Integer?) -> Array[TimeSpan]
     def each_cycle_span: (?max_cycles: Integer?) { (TimeSpan) -> void } -> self
+    def shift: (untyped amount) -> TimeSpan
+    def scale: (untyped factor) -> TimeSpan
+    def reverse_within: (untyped cycle_start, ?untyped cycle_length) -> TimeSpan
   end
 
   class Event
@@ -37,9 +40,14 @@ module Cyclotone
     def query_points: (untyped time) -> Array[untyped]
     def fmap: () { (untyped) -> untyped } -> Pattern
     def merge: (untyped other) -> Pattern
+    def merge_left: (untyped other) -> Pattern
+    def merge_right: (untyped other) -> Pattern
+    def merge_deep: (untyped other) -> Pattern
 
     def self.pure: (untyped value) -> Pattern
     def self.silence: () -> Pattern
+    def self.atom_at: (untyped value, at: untyped, ?duration: untyped) -> Pattern
+    def self.continuous: (?sample: Symbol) { (untyped) -> untyped } -> Pattern
     def self.mn: (String string) -> Pattern
     def self.try_mn: (String string) -> Pattern?
     def self.fastcat: (Array[untyped] patterns) -> Pattern

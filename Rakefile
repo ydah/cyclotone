@@ -15,6 +15,13 @@ rescue LoadError
   warn "rubocop is not available; run bundle install to enable linting"
 end
 
+desc "Validate RBS signatures"
+task :rbs do
+  sh "rbs", "validate", "sig/cyclotone.rbs"
+rescue Errno::ENOENT
+  warn "rbs is not available; run bundle install to enable signature validation"
+end
+
 desc "Syntax-check examples without external OSC/MIDI services"
 task :examples do
   Dir.glob("examples/*.rb").each do |path|
