@@ -44,6 +44,14 @@ RSpec.describe Cyclotone::Event do
       expect(updated.part).to eq(event.part)
       expect(event.value).to eq("bd")
     end
+
+    it "deep-freezes mutable values" do
+      event = described_class.new(whole: whole, part: part, value: { notes: [60, 64] })
+
+      expect(event.value).to be_frozen
+      expect(event.value[:notes]).to be_frozen
+      expect { event.value[:notes] << 67 }.to raise_error(FrozenError)
+    end
   end
 
   describe "#with_span" do
@@ -57,6 +65,27 @@ RSpec.describe Cyclotone::Event do
       expect(updated.whole).to eq(new_whole)
       expect(updated.part).to eq(new_part)
       expect(updated.value).to eq("bd")
+    end
+
+    it "accepts concise span keywords" do
+      event = described_class.new(whole: whole, part: part, value: "bd")
+      new_part = Cyclotone::TimeSpan.new(1, 2)
+
+      expect(event.with_span(part: new_part).part).to eq(new_part)
+    end
+  end
+
+  describe "#initialize" do
+    it "requires a part span" do
+      expect { described_class.new(whole: whole, part: nil, value: "bd") }.to raise_error(ArgumentError, /part/)
+    end
+  end
+
+  describe "#to_h" do
+    it "exposes event fields for introspection" do
+      event = described_class.new(whole: whole, part: part, value: "bd")
+
+      expect(event.to_h).to eq(whole: whole, part: part, value: "bd")
     end
   end
 end

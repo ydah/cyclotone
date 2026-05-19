@@ -10,6 +10,7 @@ module Cyclotone
     include Transforms::Sample
 
     SAMPLE_EPSILON = Rational(1, 1024)
+    CACHE_LIMIT = 128
 
     attr_reader :query
 
@@ -26,6 +27,7 @@ module Cyclotone
     end
 
     def query_span(span)
+      span = self.class.coerce_span(span)
       cycle_spans = span.cycle_spans
       cycle_spans = [span] if cycle_spans.empty? && continuous?
 
@@ -39,11 +41,21 @@ module Cyclotone
     end
 
     def query_event_at(time)
-      query_span(TimeSpan.new(time, time + SAMPLE_EPSILON)).find { |event| event.covers_time?(time) }
+      sample_time = self.class.to_rational(time)
+      query_span(TimeSpan.new(sample_time, sample_time + self.class.sample_epsilon)).find do |event|
+        event.covers_time?(sample_time)
+      end
     end
 
     def query_point(time)
       query_event_at(time)&.value
+    end
+
+    def query_points(time)
+      sample_time = self.class.to_rational(time)
+      query_span(TimeSpan.new(sample_time, sample_time + self.class.sample_epsilon)).select do |event|
+        event.covers_time?(sample_time)
+      end.map(&:value)
     end
 
     def fmap(&transform)
@@ -180,13 +192,31 @@ module Cyclotone
 
       alias atom pure
 
+      def atom_at(value, at:, duration: 0)
+        onset_offset = to_rational(at)
+        event_duration = to_rational(duration)
+        raise ArgumentError, "atom duration must be non-negative" if event_duration.negative?
+
+        Pattern.new do |span|
+          cycle_start = Rational(span.cycle_number)
+          onset = cycle_start + onset_offset
+          whole = TimeSpan.new(onset, onset + event_duration)
+          trigger_span = TimeSpan.new(onset, onset + sample_epsilon)
+          part = span.intersection(trigger_span)
+
+          part ? [Event.new(whole: whole, part: part, value: value)] : []
+        end
+      end
+
       def silence
         Pattern.new { |_span| [] }
       end
 
-      def continuous(&sampler)
+      def continuous(sample: :midpoint, &sampler)
+        raise ArgumentError, "continuous requires a sampler block" unless sampler
+
         Pattern.new(continuous: true) do |span|
-          [Event.new(whole: nil, part: span, value: sampler.call(span.midpoint))]
+          [Event.new(whole: nil, part: span, value: sampler.call(sample_time(span, sample)))]
         end
       end
 
@@ -199,21 +229,28 @@ module Cyclotone
         return Rational(value, 1) if value.is_a?(Integer)
 
         Rational(value.to_s)
+      rescue ArgumentError, TypeError => error
+        raise ArgumentError, "invalid rational value #{value.inspect}: #{error.message}"
       end
 
       def timecat(weighted_patterns)
-        normalized = Array(weighted_patterns)
+        normalized = Array(weighted_patterns).map do |weight, pattern|
+          normalized_weight = to_rational(weight)
+          raise ArgumentError, "timecat weights must be positive" unless normalized_weight.positive?
+
+          [normalized_weight, pattern]
+        end
         raise ArgumentError, "timecat requires patterns" if normalized.empty?
 
-        total_weight = normalized.sum { |weight, _pattern| to_rational(weight) }
+        total_weight = normalized.sum { |weight, _pattern| weight }
+        raise ArgumentError, "timecat total weight must be positive" unless total_weight.positive?
 
         Pattern.new do |span|
           cycle_start = Rational(span.cycle_number)
           cursor = cycle_start
 
           normalized.flat_map do |weight, pattern|
-            normalized_weight = to_rational(weight)
-            segment_length = normalized_weight / total_weight
+            segment_length = weight / total_weight
             segment_span = TimeSpan.new(cursor, cursor + segment_length)
             overlap = span.intersection(segment_span)
             cursor += segment_length
@@ -255,11 +292,12 @@ module Cyclotone
         end
       end
 
-      def randcat(patterns)
+      def randcat(patterns, namespace: :randcat)
         normalized = Array(patterns)
+        raise ArgumentError, "randcat requires patterns" if normalized.empty?
 
         Pattern.new do |span|
-          index = Support::Deterministic.int(normalized.length, :randcat, span.cycle_number)
+          index = Support::Deterministic.int(normalized.length, namespace, span.cycle_number)
           ensure_pattern(normalized[index]).query_span(span)
         end
       end
@@ -272,9 +310,13 @@ module Cyclotone
         fastcat([first, second])
       end
 
-      def stack(patterns)
+      def stack(patterns, empty: :error)
         normalized_patterns = Array(patterns).map { |pattern| ensure_pattern(pattern) }
-        raise ArgumentError, "stack requires at least one pattern" if normalized_patterns.empty?
+        if normalized_patterns.empty?
+          return silence if empty == :silence
+
+          raise ArgumentError, "stack requires at least one pattern"
+        end
 
         Pattern.new do |span|
           normalized_patterns.flat_map { |pattern| pattern.query_span(span) }.then do |events|
@@ -283,16 +325,31 @@ module Cyclotone
         end
       end
 
+      def stack_or_silence(patterns)
+        stack(patterns, empty: :silence)
+      end
+
       def overlay(first, second)
         stack([first, second])
       end
 
       def mn(string)
-        compiler.compile(parser.parse(string))
+        source = string.to_s
+        cached_pattern(source) { compiler.compile(parser.parse(source)) }
+      end
+
+      def mn!(string)
+        mn(string)
+      end
+
+      def try_mn(string)
+        mn(string)
+      rescue ParseError, ArgumentError
+        nil
       end
 
       def parser
-        @parser ||= MiniNotation::Parser.new
+        MiniNotation::Parser.new
       end
 
       def compiler
@@ -301,8 +358,30 @@ module Cyclotone
 
       def sort_events(events)
         events.sort_by do |event|
-          [event.onset || event.part.start, event.offset || event.part.stop, event.value.to_s]
+          [
+            event.onset || event.part.start,
+            event.offset || event.part.stop,
+            Support::Deterministic.canonical_key(event.value)
+          ]
         end
+      end
+
+      def coerce_span(value)
+        return value if value.is_a?(TimeSpan)
+        return TimeSpan.new(value.fetch(0), value.fetch(1)) if value.respond_to?(:fetch)
+
+        raise ArgumentError, "expected TimeSpan or [start, stop], got #{value.class}"
+      end
+
+      def sample_epsilon
+        @sample_epsilon ||= SAMPLE_EPSILON
+      end
+
+      def sample_epsilon=(value)
+        normalized = to_rational(value)
+        raise ArgumentError, "sample epsilon must be positive" unless normalized.positive?
+
+        @sample_epsilon = normalized
       end
 
       def map_span(span, &block)
@@ -322,6 +401,38 @@ module Cyclotone
       def shift_event(event, amount)
         offset = to_rational(amount)
         map_event(event) { |time| time + offset }
+      end
+
+      private
+
+      def sample_time(span, sample)
+        case sample
+        when :begin, :start
+          span.start
+        when :end, :stop
+          span.stop
+        when :midpoint, :center
+          span.midpoint
+        else
+          raise ArgumentError, "unknown continuous sample point #{sample.inspect}"
+        end
+      end
+
+      def cached_pattern(source)
+        @mn_cache ||= {}
+        @mn_cache_order ||= []
+
+        return @mn_cache[source] if @mn_cache.key?(source)
+
+        pattern = yield
+        @mn_cache[source] = pattern
+        @mn_cache_order << source
+
+        while @mn_cache_order.length > CACHE_LIMIT
+          @mn_cache.delete(@mn_cache_order.shift)
+        end
+
+        pattern
       end
     end
 

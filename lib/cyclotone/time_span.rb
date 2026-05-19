@@ -26,8 +26,9 @@ module Cyclotone
     end
 
     def intersection(other)
-      intersection_start = [start, other.start].max
-      intersection_stop = [stop, other.stop].min
+      other_span = coerce_span(other)
+      intersection_start = [start, other_span.start].max
+      intersection_stop = [stop, other_span.stop].min
 
       return nil if intersection_start >= intersection_stop
 
@@ -62,6 +63,7 @@ module Cyclotone
 
     def scale(factor)
       normalized_factor = coerce_time(factor)
+      raise ArgumentError, "scale factor must be non-negative" if normalized_factor.negative?
 
       self.class.new(start * normalized_factor, stop * normalized_factor)
     end
@@ -69,6 +71,8 @@ module Cyclotone
     def reverse_within(cycle_start, cycle_length = 1)
       normalized_start = coerce_time(cycle_start)
       normalized_length = coerce_time(cycle_length)
+      raise ArgumentError, "cycle length must be positive" unless normalized_length.positive?
+
       mirror = (normalized_start * 2) + normalized_length
 
       self.class.new(mirror - stop, mirror - start)
@@ -94,6 +98,15 @@ module Cyclotone
       return value if value.is_a?(Rational)
 
       Rational(value)
+    rescue ArgumentError, TypeError => error
+      raise ArgumentError, "invalid time value #{value.inspect}: #{error.message}"
+    end
+
+    def coerce_span(value)
+      return value if value.is_a?(self.class)
+      return self.class.new(value.fetch(0), value.fetch(1)) if value.respond_to?(:fetch)
+
+      raise ArgumentError, "expected #{self.class}, got #{value.class}"
     end
   end
 end

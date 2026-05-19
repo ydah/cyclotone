@@ -2,12 +2,17 @@
 
 module Cyclotone
   class Event
+    UNSET = Object.new.freeze
+
     attr_reader :whole, :part, :value
 
     def initialize(whole:, part:, value:)
+      raise ArgumentError, "part must be a TimeSpan" unless part.is_a?(TimeSpan)
+      raise ArgumentError, "whole must be nil or a TimeSpan" unless whole.nil? || whole.is_a?(TimeSpan)
+
       @whole = whole
       @part = part
-      @value = value
+      @value = deep_freeze(value)
       freeze
     end
 
@@ -45,8 +50,15 @@ module Cyclotone
       self.class.new(whole: whole, part: part, value: new_value)
     end
 
-    def with_span(new_whole: whole, new_part: part)
-      self.class.new(whole: new_whole, part: new_part, value: value)
+    def with_span(new_whole: UNSET, new_part: UNSET, whole: UNSET, part: UNSET)
+      next_whole = whole.equal?(UNSET) ? (new_whole.equal?(UNSET) ? self.whole : new_whole) : whole
+      next_part = part.equal?(UNSET) ? (new_part.equal?(UNSET) ? self.part : new_part) : part
+
+      self.class.new(whole: next_whole, part: next_part, value: value)
+    end
+
+    def to_h
+      { whole: whole, part: part, value: value }
     end
 
     def ==(other)
@@ -60,6 +72,21 @@ module Cyclotone
 
     def hash
       [self.class, whole, part, value].hash
+    end
+
+    private
+
+    def deep_freeze(object)
+      case object
+      when Hash
+        object.each_with_object({}) do |(key, entry), frozen_hash|
+          frozen_hash[deep_freeze(key)] = deep_freeze(entry)
+        end.freeze
+      when Array
+        object.map { |entry| deep_freeze(entry) }.freeze
+      else
+        object.freeze
+      end
     end
   end
 end

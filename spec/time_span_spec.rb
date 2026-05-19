@@ -44,6 +44,12 @@ RSpec.describe Cyclotone::TimeSpan do
 
       expect(span.intersection(other)).to be_nil
     end
+
+    it "accepts pair-like span input" do
+      span = described_class.new(0, 1)
+
+      expect(span.intersection([Rational(1, 2), 2])).to eq(described_class.new(Rational(1, 2), 1))
+    end
   end
 
   describe "#includes?" do
@@ -71,6 +77,18 @@ RSpec.describe Cyclotone::TimeSpan do
       span = described_class.new(1, 1)
 
       expect(span.cycle_spans).to eq([])
+    end
+  end
+
+  describe "#scale" do
+    it "rejects negative factors" do
+      expect { described_class.new(0, 1).scale(-1) }.to raise_error(ArgumentError, /non-negative/)
+    end
+  end
+
+  describe "#reverse_within" do
+    it "rejects non-positive cycle lengths" do
+      expect { described_class.new(0, 1).reverse_within(0, 0) }.to raise_error(ArgumentError, /positive/)
     end
   end
 end
