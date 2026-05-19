@@ -4,6 +4,7 @@
 /_yardoc/
 /coverage/
 /doc/
+/.mutant/
 /pkg/
 /spec/reports/
 /tmp/

@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "prop_check"
+
 RSpec.describe "core pattern properties" do
   it "keeps intersections commutative for representative spans" do
     spans = [
@@ -37,12 +39,13 @@ RSpec.describe "core pattern properties" do
     expect(pattern.rev.rev.query_cycle(0).map(&:value)).to eq(pattern.query_cycle(0).map(&:value))
   end
 
-  it "keeps generated representative spans well-formed" do
-    random = Random.new(12_345)
-
-    100.times do
-      left = Rational(random.rand(0..64), 8)
-      width = Rational(random.rand(0..32), 8)
+  it "keeps generated spans well-formed" do
+    PropCheck.forall(
+      start_tick: PropCheck::Generators.choose(0..64),
+      width_tick: PropCheck::Generators.choose(0..32)
+    ).with_config(n_runs: 100).check do |start_tick:, width_tick:|
+      left = Rational(start_tick, 8)
+      width = Rational(width_tick, 8)
       span = Cyclotone::TimeSpan.new(left, left + width)
 
       expect(span.duration).to be >= 0

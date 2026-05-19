@@ -12,3 +12,7 @@ gem "rspec", "~> 3.13"
 gem "rubocop", "~> 1.86", require: false
 gem "simplecov", "~> 0.22"
 gem "yard", "~> 0.9"
+
+gem "prop_check", "~> 1.0", group: :development, require: false
+
+gem "mutant-rspec", "~> 0.16.3", group: :development, require: false

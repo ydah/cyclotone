@@ -29,6 +29,19 @@ task :examples do
   end
 end
 
+desc "Run focused mutation tests for core music primitives"
+task :mutation do
+  sh "bundle", "exec", "mutant", "run",
+     "--include", "lib",
+     "--require", "cyclotone",
+     "--usage", "opensource",
+     "--integration", "rspec",
+     "--fail-fast",
+     "Cyclotone::TimeSpan#duration",
+     "Cyclotone::TimeSpan#midpoint",
+     "Cyclotone::TimeSpan#intersection"
+end
+
 desc "Generate YARD documentation"
 YARD::Rake::YardocTask.new(:yard)
 

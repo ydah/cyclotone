@@ -24,7 +24,7 @@ RSpec.describe Cyclotone::TimeSpan do
 
   describe "#midpoint" do
     it "returns the center of the span" do
-      span = described_class.new(0, 1)
+      span = described_class.new(Rational(1, 4), Rational(3, 4))
 
       expect(span.midpoint).to eq(Rational(1, 2))
     end
@@ -38,11 +38,21 @@ RSpec.describe Cyclotone::TimeSpan do
       expect(span.intersection(other)).to eq(described_class.new(Rational(1, 2), 1))
     end
 
+    it "returns the contained span when one span fully covers another" do
+      outer = described_class.new(0, 3)
+      inner = described_class.new(1, 2)
+
+      expect(inner.intersection(outer)).to eq(inner)
+      expect(outer.intersection(inner)).to eq(inner)
+    end
+
     it "returns nil when spans do not overlap" do
       span = described_class.new(0, 1)
       other = described_class.new(1, 2)
+      later = described_class.new(2, 3)
 
       expect(span.intersection(other)).to be_nil
+      expect(span.intersection(later)).to be_nil
     end
 
     it "accepts pair-like span input" do
