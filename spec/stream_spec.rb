@@ -6,6 +6,8 @@ RSpec.describe Cyclotone::Stream do
   after do
     stream.hush
     stream.instance_variable_get(:@slots).clear
+    stream.instance_variable_get(:@slot_options).clear
+    stream.instance_variable_get(:@transitions).clear
     stream.instance_variable_get(:@soloed).clear
     stream.instance_variable_get(:@muted).clear
   end
@@ -52,6 +54,15 @@ RSpec.describe Cyclotone::Stream do
     expect(stream.slot(:d1).query_cycle(0)).to eq([])
   end
 
+  it "supports hush mute and clear modes" do
+    stream.d(1, "bd")
+    stream.hush(mode: :mute)
+    expect(stream.send(:active_slots)).to eq({})
+
+    stream.hush(mode: :clear)
+    expect(stream.slot(:d1)).to be_nil
+  end
+
   it "supports trigger quantization helpers" do
     scheduler = stream.scheduler
 
@@ -75,6 +86,14 @@ RSpec.describe Cyclotone::Stream do
 
     expect(independent.slot(:d1).query_cycle(0).map(&:value)).to eq(["bd"])
     expect(independent).not_to equal(described_class.instance)
+  end
+
+  it "passes slot timing options into the scheduler" do
+    independent = described_class.new(backend: Cyclotone::Backends::NullBackend.new)
+    independent.d(1, "bd sd", cps: 2, phase: Rational(1, 2))
+
+    slot_options = independent.instance_variable_get(:@slot_options).fetch(:d1)
+    expect(slot_options).to include(cps: 2, phase: Rational(1, 2))
   end
 
   it "rejects invalid mtrigger periods" do

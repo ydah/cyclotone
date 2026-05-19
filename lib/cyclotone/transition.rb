@@ -10,7 +10,7 @@ module Cyclotone
 
     def xfade_in(id, cycles, pattern)
       slot_id = normalize_slot_reference(id)
-      current = @slots[slot_id] || Pattern.silence
+      current = pattern_for_transition(slot_id)
       replacement = Pattern.ensure_pattern(pattern)
       duration = Pattern.to_rational(cycles)
       return assign(slot_id, replacement) if duration <= 0
@@ -22,7 +22,7 @@ module Cyclotone
         apply_gain_envelope(replacement, start_cycle: start_cycle, duration: duration, direction: :in)
       ])
 
-      assign(slot_id, mixed)
+      assign_transition(slot_id, mixed, replacement: replacement, finish_cycle: start_cycle + duration)
     end
 
     def clutch(id, pattern)
@@ -31,7 +31,7 @@ module Cyclotone
 
     def clutch_in(id, cycles, pattern)
       slot_id = normalize_slot_reference(id)
-      current = @slots[slot_id] || Pattern.silence
+      current = pattern_for_transition(slot_id)
       replacement = Pattern.ensure_pattern(pattern)
       duration = Pattern.to_rational(cycles)
       return assign(slot_id, replacement) if duration <= 0
@@ -48,7 +48,7 @@ module Cyclotone
         end.then { |events| Pattern.sort_events(events) }
       end
 
-      assign(slot_id, swapped)
+      assign_transition(slot_id, swapped, replacement: replacement, finish_cycle: start_cycle + duration)
     end
 
     def interpolate(id, pattern)
@@ -57,14 +57,14 @@ module Cyclotone
 
     def interpolate_in(id, cycles, pattern)
       slot_id = normalize_slot_reference(id)
-      current = @slots[slot_id] || Pattern.silence
+      current = pattern_for_transition(slot_id)
       replacement = Pattern.ensure_pattern(pattern)
       duration = Pattern.to_rational(cycles)
       return assign(slot_id, replacement) if duration <= 0
 
       start_cycle = transition_start_cycle
       morphed = Pattern.new do |span|
-        anchor_times = Pattern.stack([current, replacement]).query_span(span).map do |event|
+        anchor_times = [current, replacement].flat_map { |candidate| candidate.query_span(span) }.map do |event|
           event.onset || event.part.start
         end.uniq.sort
 
@@ -79,7 +79,7 @@ module Cyclotone
         end.then { |events| Pattern.sort_events(events) }
       end
 
-      assign(slot_id, morphed)
+      assign_transition(slot_id, morphed, replacement: replacement, finish_cycle: start_cycle + duration)
     end
 
     def jump(id, pattern)
@@ -88,14 +88,14 @@ module Cyclotone
 
     def jump_in(id, cycles, pattern)
       slot_id = normalize_slot_reference(id)
-      current = @slots[slot_id] || Pattern.silence
+      current = pattern_for_transition(slot_id)
       replacement = Pattern.ensure_pattern(pattern)
       switch_cycle = transition_start_cycle + Pattern.to_rational(cycles)
       return assign(slot_id, replacement) if switch_cycle <= transition_start_cycle
 
       delayed = Pattern.new { |span| split_query(span, switch_cycle, current, replacement) }
 
-      assign(slot_id, delayed)
+      assign_transition(slot_id, delayed, replacement: replacement, finish_cycle: switch_cycle)
     end
 
     def anticipate(id, pattern)
@@ -108,7 +108,13 @@ module Cyclotone
       return self if duration <= 0
 
       @slots.keys.each do |slot_id|
-        assign(slot_id, apply_gain_envelope(@slots.fetch(slot_id), start_cycle: start_cycle, duration: duration, direction: :in))
+        replacement = @slots.fetch(slot_id)
+        assign_transition(
+          slot_id,
+          apply_gain_envelope(replacement, start_cycle: start_cycle, duration: duration, direction: :in),
+          replacement: replacement,
+          finish_cycle: start_cycle + duration
+        )
       end
 
       self
@@ -120,7 +126,12 @@ module Cyclotone
       return self if duration <= 0
 
       @slots.keys.each do |slot_id|
-        assign(slot_id, apply_gain_envelope(@slots.fetch(slot_id), start_cycle: start_cycle, duration: duration, direction: :out))
+        assign_transition(
+          slot_id,
+          apply_gain_envelope(@slots.fetch(slot_id), start_cycle: start_cycle, duration: duration, direction: :out),
+          replacement: Pattern.silence,
+          finish_cycle: start_cycle + duration
+        )
       end
 
       self

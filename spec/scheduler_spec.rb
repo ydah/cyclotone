@@ -126,4 +126,53 @@ RSpec.describe Cyclotone::Scheduler do
 
     expect(capture_backend.calls.map(&:first)).to eq(%i[begin_capture send_event end_capture write])
   end
+
+  it "supports injected clocks for deterministic scheduling" do
+    clock = Class.new do
+      attr_accessor :monotonic, :wall
+
+      def initialize
+        @monotonic = 10.0
+        @wall = 100.0
+      end
+
+      def monotonic_time
+        monotonic
+      end
+
+      def wall_time
+        wall
+      end
+    end.new
+    scheduler = described_class.new(cps: 1, backend: backend, lookahead: 0.25, clock: clock)
+    scheduler.update_pattern(:d1, Cyclotone::Controls.s("bd"))
+
+    scheduler.tick(clock.monotonic)
+
+    expect(events.first[:at]).to eq(100.0)
+  end
+
+  it "supports cycle-based lookahead and interval values" do
+    clock = Class.new do
+      def monotonic_time = 10.0
+      def wall_time = 100.0
+    end.new
+    scheduler = described_class.new(cps: 2, backend: backend, lookahead_cycles: 1, interval_cycles: 0.5, clock: clock)
+    scheduler.update_pattern(:d1, Cyclotone::Controls.s("bd sd"))
+
+    scheduler.tick(10.0)
+
+    expect(events.map { |entry| entry[:event].value[:s] }).to eq(%w[bd sd])
+    expect(scheduler.send(:current_interval)).to eq(0.25)
+  end
+
+  it "supports slot-local cps scaling" do
+    scheduler = described_class.new(cps: 1, backend: backend)
+    scheduler.update_pattern(:lead, Cyclotone::Controls.s("bd sd"), cps: 2)
+
+    scheduler.render(duration: 0.5)
+
+    expect(events.map { |entry| entry[:event].value[:s] }).to eq(%w[bd sd])
+    expect(events.map { |entry| entry[:event].onset }).to eq([0, Rational(1, 4)])
+  end
 end

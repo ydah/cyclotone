@@ -8,23 +8,35 @@ module Cyclotone
     INTERVAL = 0.05
     DEFAULT_CPS = Rational(9, 16)
     SENT_RETAIN_CYCLES = 4
+    SystemClock = Struct.new(:unused, keyword_init: true) do
+      def monotonic_time
+        Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      end
 
-    attr_reader :backend, :cps, :lookahead, :interval, :metrics
+      def wall_time
+        Time.now.to_f
+      end
+    end
 
-    def initialize(cps: DEFAULT_CPS, backend:, lookahead: LOOKAHEAD, interval: INTERVAL, logger: nil, retry_failed: false)
+    attr_reader :backend, :cps, :lookahead, :interval, :lookahead_cycles, :interval_cycles, :metrics
+
+    def initialize(cps: DEFAULT_CPS, backend:, lookahead: LOOKAHEAD, interval: INTERVAL, lookahead_cycles: nil, interval_cycles: nil, logger: nil, retry_failed: false, clock: nil)
       @backend = backend
       @cps = normalize_cps(cps)
       @lookahead = lookahead
       @interval = interval
+      @lookahead_cycles = lookahead_cycles&.to_f
+      @interval_cycles = interval_cycles&.to_f
       @logger = logger
       @retry_failed = retry_failed
+      @clock = clock || SystemClock.new
       @mutex = Mutex.new
       @patterns = {}
       @sent = {}
       @running = false
       @thread = nil
       @start_monotonic = monotonic_time
-      @start_wall_time = Time.now.to_f
+      @start_wall_time = wall_time
       @start_cycle = 0.0
       @last_cycle = 0.0
       @metrics = { ticks: 0, last_tick_duration: 0.0, max_tick_duration: 0.0 }
@@ -48,7 +60,7 @@ module Cyclotone
             end
 
             record_tick_duration(monotonic_time - tick_started)
-            sleep(@interval)
+            sleep(current_interval)
           end
         end
       end
@@ -73,12 +85,23 @@ module Cyclotone
 
     def tick(now = monotonic_time)
       state = snapshot_state
-      logical_end = time_to_cycle(now + lookahead, state[:cps], state[:start_cycle], state[:start_monotonic])
+      current_cycle = time_to_cycle(now, state[:cps], state[:start_cycle], state[:start_monotonic])
+      logical_end = if lookahead_cycles
+                      current_cycle + lookahead_cycles
+                    else
+                      time_to_cycle(now + lookahead, state[:cps], state[:start_cycle], state[:start_monotonic])
+                    end
       dispatch_until(logical_end, state)
     end
 
-    def update_pattern(slot_id, pattern)
-      @mutex.synchronize { @patterns[slot_id] = Pattern.ensure_pattern(pattern) }
+    def update_pattern(slot_id, pattern, cps: nil, phase: 0)
+      @mutex.synchronize do
+        @patterns[slot_id] = {
+          pattern: Pattern.ensure_pattern(pattern),
+          cps: cps&.to_f,
+          phase: Pattern.to_rational(phase)
+        }
+      end
     end
 
     def remove_pattern(slot_id)
@@ -91,7 +114,7 @@ module Cyclotone
     def setcps(value)
       normalized_cps = normalize_cps(value)
       now = monotonic_time
-      wall_now = Time.now.to_f
+      wall_now = wall_time
 
       @mutex.synchronize do
         current_cycle = time_to_cycle(now, @cps, @start_cycle, @start_monotonic)
@@ -111,7 +134,7 @@ module Cyclotone
       @mutex.synchronize do
         @start_cycle = value.to_f
         @start_monotonic = monotonic_time
-        @start_wall_time = Time.now.to_f
+        @start_wall_time = wall_time
         @last_cycle = value.to_f
         @sent.clear
       end
@@ -147,7 +170,17 @@ module Cyclotone
     private
 
     def monotonic_time
-      Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      @clock.respond_to?(:monotonic_time) ? @clock.monotonic_time : @clock.call(:monotonic)
+    end
+
+    def wall_time
+      @clock.respond_to?(:wall_time) ? @clock.wall_time : @clock.call(:wall)
+    end
+
+    def current_interval
+      return interval unless interval_cycles
+
+      interval_cycles / cps
     end
 
     def snapshot_state
@@ -170,8 +203,14 @@ module Cyclotone
       query_span = TimeSpan.new(Rational(state[:last_cycle].to_r), Rational(logical_end.to_r))
       failed = false
 
-      state[:patterns].each do |slot_id, pattern|
-        pattern.query_span(query_span).each do |event|
+      state[:patterns].each do |slot_id, slot|
+        pattern = slot[:pattern]
+        scale = slot_scale(slot, state[:cps])
+        phase = slot[:phase]
+        slot_span = TimeSpan.new((query_span.start * scale) + phase, (query_span.stop * scale) + phase)
+
+        pattern.query_span(slot_span).each do |event|
+          event = map_slot_event(event, scale, phase)
           next unless event.onset
 
           key = [slot_id, event.onset, event.value]
@@ -216,6 +255,19 @@ module Cyclotone
           max_tick_duration: [@metrics[:max_tick_duration], duration].max
         }
       end
+    end
+
+    def slot_scale(slot, global_cps)
+      slot_cps = slot[:cps]
+      return Rational(1) unless slot_cps&.positive?
+
+      Rational(slot_cps.to_r) / Rational(global_cps.to_r)
+    end
+
+    def map_slot_event(event, scale, phase)
+      return event if scale == 1 && phase.zero?
+
+      Pattern.map_event(event) { |time| (time - phase) / scale }
     end
 
     def normalize_cps(value)

@@ -16,6 +16,8 @@ module Cyclotone
 
     def initialize(backend: nil, scheduler: nil)
       @slots = {}
+      @slot_options = {}
+      @transitions = {}
       @muted = Set.new
       @soloed = Set.new
       @fallback_error = nil
@@ -25,16 +27,30 @@ module Cyclotone
       @scheduler = Scheduler.new(backend: Backends::NullBackend.new)
     end
 
-    def d(slot_id, pattern)
-      assign(normalize_d_slot_id(slot_id), pattern)
+    def d(slot_id, pattern, cps: nil, phase: 0)
+      assign(normalize_d_slot_id(slot_id), pattern, cps: cps, phase: phase)
     end
 
-    def p(name, pattern)
-      assign(normalize_slot_reference(name), pattern)
+    def p(name, pattern, cps: nil, phase: 0)
+      assign(normalize_slot_reference(name), pattern, cps: cps, phase: phase)
     end
 
-    def hush
-      @slots.keys.each { |slot_id| assign(slot_id, Pattern.silence) }
+    def hush(mode: :silence)
+      case mode
+      when :silence
+        @slots.keys.each { |slot_id| assign(slot_id, Pattern.silence) }
+      when :mute
+        @muted.merge(@slots.keys)
+        sync_scheduler
+      when :clear
+        @slots.keys.each { |slot_id| @scheduler.remove_pattern(slot_id) }
+        @slots.clear
+        @slot_options.clear
+        @transitions.clear
+      else
+        raise ArgumentError, "unknown hush mode #{mode}"
+      end
+
       self
     end
 
@@ -113,15 +129,41 @@ module Cyclotone
     end
 
     def slot(slot_id)
-      @slots[normalize_slot_reference(slot_id)]
+      normalized = normalize_slot_reference(slot_id)
+      simplify_completed_transition(normalized)
+      @slots[normalized]
     end
 
     private
 
-    def assign(slot_id, pattern)
+    def assign(slot_id, pattern, cps: nil, phase: 0)
       @slots[slot_id] = normalize_pattern(pattern)
+      @slot_options[slot_id] = { cps: cps, phase: phase }
+      @transitions.delete(slot_id)
       sync_scheduler
       @slots[slot_id]
+    end
+
+    def assign_transition(slot_id, pattern, replacement:, finish_cycle:)
+      @slots[slot_id] = normalize_pattern(pattern)
+      @transitions[slot_id] = { replacement: replacement, finish_cycle: finish_cycle }
+      sync_scheduler
+      @slots[slot_id]
+    end
+
+    def pattern_for_transition(slot_id)
+      simplify_completed_transition(slot_id)
+      @slots[slot_id] || Pattern.silence
+    end
+
+    def simplify_completed_transition(slot_id)
+      transition = @transitions[slot_id]
+      return unless transition
+      return if @scheduler.current_cycle < transition[:finish_cycle].to_f
+
+      @slots[slot_id] = transition[:replacement]
+      @transitions.delete(slot_id)
+      sync_scheduler
     end
 
     def normalize_pattern(pattern)
@@ -153,7 +195,8 @@ module Cyclotone
 
     def sync_scheduler
       active_slots.each do |slot_id, pattern|
-        @scheduler.update_pattern(slot_id, pattern)
+        options = @slot_options.fetch(slot_id, {})
+        @scheduler.update_pattern(slot_id, pattern, cps: options[:cps], phase: options[:phase] || 0)
       end
 
       inactive_slots.each do |slot_id|

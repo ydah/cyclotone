@@ -6,6 +6,8 @@ RSpec.describe Cyclotone::Stream do
   after do
     stream.hush
     stream.instance_variable_get(:@slots).clear
+    stream.instance_variable_get(:@slot_options).clear
+    stream.instance_variable_get(:@transitions).clear
     stream.instance_variable_get(:@soloed).clear
     stream.instance_variable_get(:@muted).clear
   end
@@ -67,5 +69,30 @@ RSpec.describe Cyclotone::Stream do
 
     value = stream.slot(:lead).query_cycle(0).first.value
     expect(value).to include(value: "bd", gain: be_between(0.0, 1.0))
+  end
+
+  it "simplifies completed transition wrappers to their replacements" do
+    stream.reset_cycles
+    stream.set_cycle(0)
+    stream.p(:lead, Cyclotone::Controls.s("bd"))
+
+    stream.jump_in(:lead, 1, Cyclotone::Controls.s("sd"))
+    stream.set_cycle(2)
+
+    expect(stream.slot(:lead).query_cycle(2).map { |event| event.value[:s] }).to eq(["sd"])
+    expect(stream.instance_variable_get(:@transitions)).not_to have_key(:lead)
+  end
+
+  it "uses a completed transition replacement as the source for a new transition" do
+    stream.reset_cycles
+    stream.set_cycle(0)
+    stream.p(:lead, Cyclotone::Controls.s("bd"))
+
+    stream.jump_in(:lead, 1, Cyclotone::Controls.s("sd"))
+    stream.set_cycle(2)
+    stream.xfade_in(:lead, 1, Cyclotone::Controls.s("hh"))
+
+    values = stream.slot(:lead).query_cycle(2).map { |event| event.value[:s] }
+    expect(values).to include("sd", "hh")
   end
 end
