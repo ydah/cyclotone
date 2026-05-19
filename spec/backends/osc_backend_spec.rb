@@ -162,4 +162,49 @@ RSpec.describe Cyclotone::Backends::OSCBackend do
 
     expect(closable.closed).to be(true)
   end
+
+  it "reopens a socket after an explicit close before sending again" do
+    first_socket = Class.new do
+      attr_reader :closed
+
+      def initialize
+        @closed = false
+      end
+
+      def close
+        @closed = true
+      end
+    end.new
+    replacement_packets = []
+    replacement_socket = Class.new do
+      def initialize(sent_packets)
+        @sent_packets = sent_packets
+      end
+
+      def send(packet, _flags, host, port)
+        @sent_packets << { packet: packet, host: host, port: port }
+      end
+    end.new(replacement_packets)
+    reconnects = 0
+    backend = described_class.new(
+      socket: first_socket,
+      retries: 0,
+      socket_factory: lambda {
+        reconnects += 1
+        replacement_socket
+      }
+    )
+    event = Cyclotone::Event.new(
+      whole: Cyclotone::TimeSpan.new(0, 1),
+      part: Cyclotone::TimeSpan.new(0, 1),
+      value: { s: "bd" }
+    )
+
+    backend.close
+    backend.send_event(event, at: 2.0)
+
+    expect(first_socket.closed).to be(true)
+    expect(reconnects).to eq(1)
+    expect(replacement_packets.length).to eq(1)
+  end
 end

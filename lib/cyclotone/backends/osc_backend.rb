@@ -34,6 +34,7 @@ module Cyclotone
         @socket_factory = socket_factory || proc { UDPSocket.new }
         @retries = retries.to_i
         @socket = socket || build_socket
+        @closed = false
       rescue StandardError => error
         raise ConnectionError, error.message
       end
@@ -58,6 +59,7 @@ module Cyclotone
       end
 
       def send_event(event, at: Time.now.to_f, cps: nil, **_options)
+        reopen_if_closed!
         with_retry do
           @socket.send(build_message(event, at: at, cps: cps), 0, host, port)
         end
@@ -74,7 +76,8 @@ module Cyclotone
       end
 
       def close
-        @socket.close if @socket.respond_to?(:close)
+        close_socket
+        @closed = true
         self
       end
 
@@ -95,8 +98,17 @@ module Cyclotone
       end
 
       def reconnect!
-        @socket.close if @socket.respond_to?(:close)
+        close_socket
         @socket = build_socket
+        @closed = false
+      end
+
+      def reopen_if_closed!
+        reconnect! if @closed
+      end
+
+      def close_socket
+        @socket.close if @socket.respond_to?(:close)
       end
 
       def build_socket
