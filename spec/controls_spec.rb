@@ -10,6 +10,12 @@ RSpec.describe Cyclotone::Controls do
     ])
   end
 
+  it "uses explicit mini-notation coercion for string controls" do
+    values = described_class.gain("0.25 0.75").query_cycle(0).map(&:value)
+
+    expect(values).to eq([{ gain: 0.25 }, { gain: 0.75 }])
+  end
+
   it "merges control patterns onto pattern values" do
     values = described_class.s("bd").gain(0.5).query_cycle(0).map(&:value)
 

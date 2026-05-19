@@ -112,17 +112,24 @@ module Cyclotone
       other_pattern = self.class.ensure_pattern(other)
 
       Pattern.new do |span|
-        left_events = query_span(span)
+        left_events = query_span(span).sort_by { |event| event.active_span.start }
         right_events = other_pattern.query_span(span)
         right_events_by_start = right_events.sort_by { |event| event.active_span.start }
+        first_candidate = 0
 
         left_events.flat_map do |left_event|
-          left_stop = left_event.active_span.stop
+          left_span = left_event.active_span
+          left_stop = left_span.stop
 
-          right_events_by_start.filter_map do |right_event|
+          while first_candidate < right_events_by_start.length && right_events_by_start[first_candidate].active_span.stop <= left_span.start
+            first_candidate += 1
+          end
+
+          first_candidate.upto(right_events_by_start.length - 1).filter_map do |index|
+            right_event = right_events_by_start.fetch(index)
             break [] if right_event.active_span.start >= left_stop
 
-            overlap = left_event.active_span.intersection(right_event.active_span)
+            overlap = left_span.intersection(right_event.active_span)
             next unless overlap
 
             part = overlap.intersection(span)
@@ -241,8 +248,11 @@ module Cyclotone
         end
       end
 
-      def ensure_pattern(value)
-        value.is_a?(Pattern) ? value : pure(value)
+      def ensure_pattern(value, strings: :literal)
+        return value if value.is_a?(Pattern)
+        return mn(value) if value.is_a?(String) && strings == :mini_notation
+
+        pure(value)
       end
 
       def to_rational(value)

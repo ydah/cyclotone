@@ -63,6 +63,20 @@ RSpec.describe Cyclotone::Pattern do
     end
   end
 
+  describe ".ensure_pattern" do
+    it "keeps string values literal by default" do
+      pattern = described_class.ensure_pattern("bd sd")
+
+      expect(pattern.query_cycle(0).map(&:value)).to eq(["bd sd"])
+    end
+
+    it "can treat strings as mini-notation explicitly" do
+      pattern = described_class.ensure_pattern("bd sd", strings: :mini_notation)
+
+      expect(pattern.query_cycle(0).map(&:value)).to eq(%w[bd sd])
+    end
+  end
+
   describe ".fastcat" do
     it "concatenates patterns evenly inside a cycle" do
       pattern = described_class.fastcat([
@@ -152,6 +166,17 @@ RSpec.describe Cyclotone::Pattern do
         .combine_left(control) { |value, control_value| [value, control_value] }
 
       expect(pattern.query_cycle(0).map(&:value)).to eq([["bd", Rational(0)], ["sd", Rational(1, 2)]])
+    end
+  end
+
+  describe "#combine_both" do
+    it "only combines overlapping events after pruning earlier candidates" do
+      left = described_class.fastcat([described_class.pure("bd"), described_class.pure("sd")])
+      right = described_class.atom_at("late", at: Rational(3, 4), duration: Rational(1, 8))
+
+      values = left.combine_both(right) { |left_value, right_value| [left_value, right_value] }.query_cycle(0).map(&:value)
+
+      expect(values).to eq([["sd", "late"]])
     end
   end
 

@@ -95,10 +95,7 @@ module Cyclotone
     end
 
     def coerce_pattern(pattern_or_value)
-      return pattern_or_value if pattern_or_value.is_a?(Pattern)
-      return Pattern.mn(pattern_or_value) if pattern_or_value.is_a?(String)
-
-      Pattern.pure(pattern_or_value)
+      Pattern.ensure_pattern(pattern_or_value, strings: :mini_notation)
     end
 
     def wrap_value(control_name, value)

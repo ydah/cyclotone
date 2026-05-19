@@ -53,5 +53,6 @@ module Cyclotone
     def self.fastcat: (Array[untyped] patterns) -> Pattern
     def self.cat: (Array[untyped] patterns) -> Pattern
     def self.stack: (Array[untyped] patterns, ?empty: Symbol) -> Pattern
+    def self.ensure_pattern: (untyped value, ?strings: Symbol) -> Pattern
   end
 end

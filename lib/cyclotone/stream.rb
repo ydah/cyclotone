@@ -169,10 +169,7 @@ module Cyclotone
     end
 
     def normalize_pattern(pattern)
-      return pattern if pattern.is_a?(Pattern)
-      return Pattern.mn(pattern) if pattern.is_a?(String)
-
-      Pattern.pure(pattern)
+      Pattern.ensure_pattern(pattern, strings: :mini_notation)
     end
 
     def normalize_d_slot_id(slot_id)
