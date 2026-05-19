@@ -85,6 +85,7 @@ RSpec.describe Cyclotone::Scheduler do
 
     expect(attempts).to eq(2)
     expect(log_messages.join).to include("slot=lead")
+    expect(scheduler.last_error.message).to eq("send failed")
   end
 
   it "tracks scheduler tick metrics" do
@@ -174,5 +175,31 @@ RSpec.describe Cyclotone::Scheduler do
 
     expect(events.map { |entry| entry[:event].value[:s] }).to eq(%w[bd sd])
     expect(events.map { |entry| entry[:event].onset }).to eq([0, Rational(1, 4)])
+  end
+
+  it "handles concurrent lifecycle and pattern updates" do
+    scheduler = described_class.new(cps: 1, backend: Cyclotone::Backends::NullBackend.new, interval: 0.001)
+    worker_threads = 4.times.map do |index|
+      Thread.new do
+        20.times do |step|
+          scheduler.update_pattern(:"d#{index}", Cyclotone::Controls.s(step.even? ? "bd" : "sd"))
+          scheduler.setcps(1 + (step % 3))
+          scheduler.current_cycle
+        end
+      end
+    end
+    lifecycle_thread = Thread.new do
+      8.times do
+        scheduler.start
+        sleep(0.001)
+        scheduler.stop
+      end
+    end
+
+    (worker_threads + [lifecycle_thread]).each(&:value)
+    scheduler.stop
+
+    expect(scheduler.running?).to be(false)
+    expect(scheduler.last_error).to be_nil
   end
 end

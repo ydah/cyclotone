@@ -158,4 +158,18 @@ RSpec.describe Cyclotone::MiniNotation::Parser do
       end
     end
   end
+
+  it "parses cached patterns safely from multiple threads" do
+    threads = 6.times.map do
+      Thread.new do
+        30.times.map do
+          Cyclotone::Pattern.mn("bd [sd sd] hh cp").query_cycle(0).map(&:value)
+        end
+      end
+    end
+
+    results = threads.flat_map(&:value)
+
+    expect(results).to all(eq(["bd", "sd", "sd", "hh", "cp"]))
+  end
 end

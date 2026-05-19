@@ -36,4 +36,21 @@ RSpec.describe "core pattern properties" do
 
     expect(pattern.rev.rev.query_cycle(0).map(&:value)).to eq(pattern.query_cycle(0).map(&:value))
   end
+
+  it "keeps generated representative spans well-formed" do
+    random = Random.new(12_345)
+
+    100.times do
+      left = Rational(random.rand(0..64), 8)
+      width = Rational(random.rand(0..32), 8)
+      span = Cyclotone::TimeSpan.new(left, left + width)
+
+      expect(span.duration).to be >= 0
+      span.each_cycle_span do |cycle_span|
+        expect(cycle_span.start).to be >= span.start
+        expect(cycle_span.stop).to be <= span.stop
+        expect(cycle_span.duration).to be >= 0
+      end
+    end
+  end
 end

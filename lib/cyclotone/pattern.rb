@@ -11,6 +11,8 @@ module Cyclotone
 
     SAMPLE_EPSILON = Rational(1, 1024)
     CACHE_LIMIT = 128
+    CACHE_MUTEX = Mutex.new
+    COMPILER_MUTEX = Mutex.new
 
     attr_reader :query
 
@@ -28,12 +30,16 @@ module Cyclotone
 
     def query_span(span)
       span = self.class.coerce_span(span)
-      cycle_spans = span.each_cycle_span.to_a
-      cycle_spans = [span] if cycle_spans.empty? && continuous?
+      emitted_cycle_span = false
+      events = []
 
-      cycle_spans.flat_map { |cycle_span| query.call(cycle_span) }.then do |events|
-        self.class.sort_events(events)
+      span.each_cycle_span do |cycle_span|
+        emitted_cycle_span = true
+        events.concat(query.call(cycle_span))
       end
+
+      events.concat(query.call(span)) if !emitted_cycle_span && continuous?
+      self.class.sort_events(events)
     end
 
     def query_cycle(cycle_number)
@@ -368,7 +374,11 @@ module Cyclotone
       end
 
       def compiler
-        @compiler ||= MiniNotation::Compiler.new
+        return @compiler if @compiler
+
+        COMPILER_MUTEX.synchronize do
+          @compiler ||= MiniNotation::Compiler.new
+        end
       end
 
       def sort_events(events)
@@ -434,18 +444,20 @@ module Cyclotone
       end
 
       def cached_pattern(source)
-        @mn_cache ||= {}
-        @mn_cache_order ||= []
+        CACHE_MUTEX.synchronize do
+          @mn_cache ||= {}
+          @mn_cache_order ||= []
 
-        return @mn_cache[source] if @mn_cache.key?(source)
+          return @mn_cache[source] if @mn_cache.key?(source)
 
-        pattern = yield
-        @mn_cache[source] = pattern
-        @mn_cache_order << source
+          pattern = yield
+          @mn_cache[source] = pattern
+          @mn_cache_order << source
 
-        @mn_cache.delete(@mn_cache_order.shift) while @mn_cache_order.length > CACHE_LIMIT
+          @mn_cache.delete(@mn_cache_order.shift) while @mn_cache_order.length > CACHE_LIMIT
 
-        pattern
+          pattern
+        end
       end
     end
 

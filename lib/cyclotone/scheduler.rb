@@ -5,6 +5,7 @@ module Cyclotone
     LOOKAHEAD = 0.3
     INTERVAL = 0.05
     DEFAULT_CPS = Rational(9, 16)
+    DEFAULT_STOP_TIMEOUT = 1.0
     SENT_RETAIN_CYCLES = 4
     SystemClock = Struct.new(:unused, keyword_init: true) do
       def monotonic_time
@@ -43,6 +44,7 @@ module Cyclotone
       @sent = {}
       @running = false
       @thread = nil
+      @last_error = nil
       @start_monotonic = monotonic_time
       @start_wall_time = wall_time
       @start_cycle = 0.0
@@ -55,6 +57,7 @@ module Cyclotone
         return self if @running
 
         @running = true
+        @last_error = nil
         @thread = Thread.new do
           Thread.current.abort_on_exception = false
 
@@ -76,7 +79,7 @@ module Cyclotone
       self
     end
 
-    def stop(timeout: nil)
+    def stop(timeout: DEFAULT_STOP_TIMEOUT)
       thread = @mutex.synchronize do
         @running = false
         @thread
@@ -89,6 +92,10 @@ module Cyclotone
       end
 
       self
+    end
+
+    def last_error
+      @mutex.synchronize { @last_error }
     end
 
     def tick(now = monotonic_time)
@@ -186,9 +193,11 @@ module Cyclotone
     end
 
     def current_interval
-      return interval unless interval_cycles
+      @mutex.synchronize do
+        return @interval unless @interval_cycles
 
-      interval_cycles / cps
+        @interval_cycles / @cps
+      end
     end
 
     def snapshot_state
@@ -290,6 +299,7 @@ module Cyclotone
     end
 
     def log_runtime_error(error, slot_id: nil)
+      @mutex.synchronize { @last_error = error }
       slot = slot_id ? " slot=#{slot_id}" : ""
       @logger&.call("[Cyclotone::Scheduler#{slot}] #{error.class}: #{error.message}")
     end
