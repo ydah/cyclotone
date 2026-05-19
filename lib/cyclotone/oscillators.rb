@@ -93,13 +93,19 @@ module Cyclotone
       normalized_step = step.to_f
       raise ArgumentError, "brownian step must be positive" unless normalized_step.positive?
 
+      cache = { -1 => 0.5 }
+      highest_cycle = -1
+
       Pattern.continuous do |time|
         cycle = time.floor
-        steps = (0..cycle).reduce(0.5) do |value, index|
-          delta = (Support::Deterministic.float(:brownian, index) * 2.0) - 1.0
-          (value + (delta * normalized_step)).clamp(0.0, 1.0)
+
+        while highest_cycle < cycle
+          next_cycle = highest_cycle + 1
+          cache[next_cycle] = brownian_step(cache.fetch(highest_cycle), next_cycle, normalized_step)
+          highest_cycle = next_cycle
         end
-        steps
+
+        cache.fetch(cycle, 0.5)
       end
     end
 
@@ -166,6 +172,12 @@ module Cyclotone
     rescue ArgumentError, TypeError => error
       raise ArgumentError, "invalid #{label}: #{error.message}"
     end
+
+    def brownian_step(value, cycle, step)
+      delta = (Support::Deterministic.float(:brownian, cycle) * 2.0) - 1.0
+      (value + (delta * step)).clamp(0.0, 1.0)
+    end
+    private_class_method :brownian_step
 
     def interpolate(source, time, interpolation)
       anchors = anchors_for(source, time)

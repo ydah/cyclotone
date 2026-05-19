@@ -70,4 +70,18 @@ RSpec.describe Cyclotone::Oscillators do
     expect(held.query_point(Rational(1, 4))).to eq(0)
     expect(described_class.brownian.query_cycle(0).first.value).to be_between(0.0, 1.0)
   end
+
+  it "caches brownian random walk steps across queries" do
+    allow(Cyclotone::Support::Deterministic).to receive(:float).and_call_original
+    pattern = described_class.brownian
+
+    pattern.query_point(8)
+    expect(Cyclotone::Support::Deterministic).to have_received(:float).exactly(9).times
+
+    pattern.query_point(8)
+    expect(Cyclotone::Support::Deterministic).to have_received(:float).exactly(9).times
+
+    pattern.query_point(10)
+    expect(Cyclotone::Support::Deterministic).to have_received(:float).exactly(11).times
+  end
 end
