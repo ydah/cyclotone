@@ -46,6 +46,7 @@ jobs:
         run: bundle exec rake rubocop
 
       - name: Validate signatures
+        if: ${{ matrix.ruby != '3.1' }}
         run: bundle exec rake rbs
 
       - name: Build gem
