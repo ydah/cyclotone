@@ -146,7 +146,7 @@ module Cyclotone
         progress = transition_progress(time, start_cycle, duration)
         factor = direction == :in ? progress : 1.0 - progress
         value = event.value.is_a?(Hash) ? event.value.dup : { value: event.value }
-        current_gain = value.key?(:gain) ? value[:gain] : 1.0
+        current_gain = value.fetch(:gain, 1.0) || 1.0
         value[:gain] = current_gain * factor
         event.with_value(value)
       end

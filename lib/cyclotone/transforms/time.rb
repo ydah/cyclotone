@@ -61,7 +61,7 @@ module Cyclotone
         fast(amount).fmap do |value|
           next value unless value.is_a?(Hash)
 
-          current_speed = value[:speed] || 1.0
+          current_speed = value.fetch(:speed, 1.0) || 1.0
           value.merge(speed: current_speed * amount.to_f)
         end
       end

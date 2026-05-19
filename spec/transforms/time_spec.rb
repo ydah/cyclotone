@@ -40,6 +40,12 @@ RSpec.describe "time and alteration transforms" do
     expect(structured.query_cycle(0).map(&:value)).to eq(%w[bd bd])
   end
 
+  it "defaults nil speed while hurrying hash values" do
+    hurried = Cyclotone::Pattern.pure({ s: "bd", speed: nil }).hurry(2)
+
+    expect(hurried.query_cycle(0).first.value[:speed]).to eq(2.0)
+  end
+
   it "rejects non-positive time scaling amounts" do
     expect { pattern.fast(0) }.to raise_error(ArgumentError, /fast amount/)
     expect { pattern.slow(-1) }.to raise_error(ArgumentError, /slow amount/)

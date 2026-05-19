@@ -94,6 +94,15 @@ RSpec.describe Cyclotone::Stream do
     expect(stream.slot(:lead).query_cycle(0).first.value[:gain]).to eq(0.0)
   end
 
+  it "defaults nil gain while applying envelopes" do
+    stream.reset_cycles
+    stream.p(:lead, Cyclotone::Pattern.pure({ s: "bd", gain: nil }))
+
+    stream.fade_out(2)
+
+    expect(stream.slot(:lead).query_cycle(0).first.value[:gain]).to be_between(0.0, 1.0)
+  end
+
   it "simplifies completed transition wrappers to their replacements" do
     stream.reset_cycles
     stream.set_cycle(0)
