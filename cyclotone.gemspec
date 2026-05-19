@@ -19,8 +19,15 @@ Gem::Specification.new do |spec|
   spec.metadata["rubygems_mfa_required"] = "true"
 
   spec.files = Dir.chdir(__dir__) do
-    Dir.glob(%w[lib/**/* exe/* README* LICENSE* Rakefile *.gemspec], File::FNM_DOTMATCH).select do |path|
-      File.file?(path)
+    tracked = begin
+      `git ls-files -z`.split("\x0")
+    rescue StandardError
+      []
+    end
+
+    candidates = tracked.empty? ? Dir.glob(%w[lib/**/* exe/* README* LICENSE* Rakefile *.gemspec], File::FNM_DOTMATCH) : tracked
+    candidates.select do |path|
+      File.file?(path) && path.match?(%r{\A(?:lib/|exe/|README|LICENSE|Rakefile|[^/]+\.gemspec\z)})
     end
   end
   spec.bindir = "exe"
