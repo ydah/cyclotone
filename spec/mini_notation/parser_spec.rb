@@ -145,11 +145,14 @@ RSpec.describe Cyclotone::MiniNotation::Parser do
   end
 
   it "does not hang on random punctuation smoke input" do
-    alphabet = ["[", "]", "{", "}", "(", ")", "<", ">", ",", ".", "~", "*", "/", "!", "_", "@", "?", "|", ":", "%", "-", "1", "a", " "]
+    alphabet = [
+      "[", "]", "{", "}", "(", ")", "<", ">", ",", ".", "~", "*", "/", "!", "_", "@", "?", "|", ":", "%",
+      "-", "\"", "'", "\\", "\n", "0", "1", "2", "a", "bd", " "
+    ]
     random = Random.new(1234)
 
-    100.times do
-      input = Array.new(24) { alphabet[random.rand(alphabet.length)] }.join
+    250.times do
+      input = Array.new(random.rand(1..48)) { alphabet[random.rand(alphabet.length)] }.join
 
       begin
         parser.parse(input)
