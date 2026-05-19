@@ -59,6 +59,34 @@ RSpec.describe Cyclotone::Backends::MIDIBackend do
     expect(backend.messages_for(event).map { |message| message[:controller] }).to eq([1, 74])
   end
 
+  it "supports explicit velocity and controller scales" do
+    backend = described_class.new(output: output)
+    note_event = Cyclotone::Event.new(
+      whole: Cyclotone::TimeSpan.new(0, 1),
+      part: Cyclotone::TimeSpan.new(0, 1),
+      value: {
+        note: 60,
+        velocity: 1,
+        velocity_scale: :midi,
+        release_velocity: 0.5,
+        release_velocity_scale: :unit,
+        sustain: 0.25
+      }
+    )
+    cc_event = Cyclotone::Event.new(
+      whole: Cyclotone::TimeSpan.new(0, 1),
+      part: Cyclotone::TimeSpan.new(0, 1),
+      value: { cc: { 74 => 1 }, cc_scale: :midi }
+    )
+
+    note_messages = backend.messages_for(note_event)
+    cc_messages = backend.messages_for(cc_event)
+
+    expect(note_messages.first[:velocity]).to eq(1)
+    expect(note_messages.last[:velocity]).to eq(64)
+    expect(cc_messages.first[:value]).to eq(1)
+  end
+
   it "lists and selects available MIDI outputs when UniMIDI is present" do
     first = Struct.new(:name).new("Device A")
     unimidi_output = Class.new do
