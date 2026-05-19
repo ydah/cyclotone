@@ -91,4 +91,44 @@ RSpec.describe Cyclotone::MiniNotation::Parser do
   it "raises a parse error for invalid input" do
     expect { parser.parse("[bd sd") }.to raise_error(Cyclotone::ParseError)
   end
+
+  it "parses quoted atoms with escapes" do
+    ast = parser.parse('"kick/snare" "hat \"open\""')
+
+    expect(ast).to eq(
+      Cyclotone::MiniNotation::AST::Sequence.new(
+        elements: [
+          Cyclotone::MiniNotation::AST::Atom.new(value: "kick/snare"),
+          Cyclotone::MiniNotation::AST::Atom.new(value: 'hat "open"')
+        ]
+      )
+    )
+  end
+
+  it "rejects malformed numeric literals" do
+    expect { parser.parse("1..2") }.to raise_error(Cyclotone::ParseError, /invalid number literal/)
+    expect { parser.parse("1.2.3") }.to raise_error(Cyclotone::ParseError, /invalid number literal/)
+  end
+
+  it "rejects invalid suffix counts and probabilities" do
+    expect { parser.parse("bd*0") }.to raise_error(Cyclotone::ParseError, /repeat count/)
+    expect { parser.parse("bd!0") }.to raise_error(Cyclotone::ParseError, /replicate count/)
+    expect { parser.parse("bd/0") }.to raise_error(Cyclotone::ParseError, /slow amount/)
+    expect { parser.parse("bd@0") }.to raise_error(Cyclotone::ParseError, /elongate amount/)
+    expect { parser.parse("bd?-1") }.to raise_error(Cyclotone::ParseError)
+    expect { parser.parse("bd?2") }.to raise_error(Cyclotone::ParseError, /probability/)
+    expect { parser.parse("bd:1.5") }.to raise_error(Cyclotone::ParseError, /sample number/)
+  end
+
+  it "rejects invalid euclidean and polymetric counts" do
+    expect { parser.parse("bd(3,0)") }.to raise_error(Cyclotone::ParseError, /euclidean steps/)
+    expect { parser.parse("{bd sd}%0") }.to raise_error(Cyclotone::ParseError, /polymetric steps/)
+  end
+
+  it "includes source context in parse errors" do
+    expect { parser.parse("[bd sd") }.to raise_error(Cyclotone::ParseError) do |error|
+      expect(error.message).to include("[bd sd")
+      expect(error.message).to include("^")
+    end
+  end
 end

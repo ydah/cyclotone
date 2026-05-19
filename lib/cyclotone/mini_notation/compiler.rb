@@ -3,6 +3,8 @@
 module Cyclotone
   module MiniNotation
     class Compiler
+      MAX_EXPANSION = 4096
+
       def compile(node)
         case node
         when AST::Atom
@@ -16,8 +18,10 @@ module Cyclotone
         when AST::Alternating
           compile_alternating(node)
         when AST::Repeat
+          validate_expansion_count(node.count, "repeat count")
           compile(node.pattern).fast(node.count)
         when AST::Replicate
+          validate_expansion_count(node.count, "replicate count")
           Pattern.timecat(Array.new(node.count) { [1, compile(node.pattern)] })
         when AST::Slow
           compile(node.pattern).slow(node.amount)
@@ -60,6 +64,7 @@ module Cyclotone
 
       def compile_alternating(node)
         patterns = node.patterns.map { |pattern| compile(pattern) }
+        raise ArgumentError, "alternating requires patterns" if patterns.empty?
 
         Pattern.new do |span|
           cycle = span.cycle_number
@@ -77,13 +82,15 @@ module Cyclotone
       end
 
       def compile_polymetric(node)
-        base_steps = (node.steps || step_count(node.patterns.first)).to_i
-        base_steps = 1 if base_steps <= 0
+        raise ArgumentError, "polymetric requires patterns" if node.patterns.empty?
+
+        base_steps = Pattern.to_rational(node.steps || step_count(node.patterns.first))
+        raise ArgumentError, "polymetric steps must be positive" unless base_steps.positive?
 
         Pattern.stack(
           node.patterns.map do |pattern|
-            pattern_steps = [step_count(pattern), 1].max
-            compile(pattern).slow(Rational(pattern_steps, base_steps))
+            pattern_steps = [Pattern.to_rational(step_count(pattern)), Rational(1)].max
+            compile(pattern).slow(pattern_steps / base_steps)
           end
         )
       end
@@ -101,7 +108,7 @@ module Cyclotone
         when AST::Slow, AST::Degrade
           step_count(node.pattern)
         when AST::Elongate
-          step_count(node.pattern) * node.amount.to_i
+          Pattern.to_rational(step_count(node.pattern)) * Pattern.to_rational(node.amount)
         when AST::Euclidean
           [node.steps, 1].max * step_count(node.pattern)
         when AST::Polymetric
@@ -109,6 +116,11 @@ module Cyclotone
         else
           1
         end
+      end
+
+      def validate_expansion_count(count, label)
+        raise ArgumentError, "#{label} must be positive" unless count.positive?
+        raise ArgumentError, "#{label} must be <= #{MAX_EXPANSION}" if count > MAX_EXPANSION
       end
     end
   end

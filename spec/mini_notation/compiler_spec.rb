@@ -22,4 +22,19 @@ RSpec.describe Cyclotone::MiniNotation::Compiler do
     expect(values.count("sd")).to eq(1)
     expect(values.count("hh")).to eq(2)
   end
+
+  it "keeps fractional elongation in polymetric step ratios" do
+    pattern = Cyclotone::Pattern.mn("{bd@1.5, hh}%2")
+
+    expect(pattern.query_cycle(0).map(&:value)).to include("bd", "hh")
+  end
+
+  it "limits excessive repeat expansion" do
+    node = Cyclotone::MiniNotation::AST::Repeat.new(
+      pattern: Cyclotone::MiniNotation::AST::Atom.new(value: "bd"),
+      count: described_class::MAX_EXPANSION + 1
+    )
+
+    expect { described_class.new.compile(node) }.to raise_error(ArgumentError, /repeat count/)
+  end
 end

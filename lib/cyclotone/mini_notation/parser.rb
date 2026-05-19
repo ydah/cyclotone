@@ -27,11 +27,12 @@ module Cyclotone
       }.freeze
 
       def parse(input)
-        @tokens = tokenize(input.to_s)
+        @source = input.to_s
+        @tokens = tokenize(@source)
         @index = 0
 
         skip_spaces
-        raise ParseError.new("input is empty", line: 1, column: 1) if current.type == :eof
+        raise ParseError.new("input is empty", line: 1, column: 1, source: @source) if current.type == :eof
 
         ast = parse_stack(terminators: [:eof])
         skip_spaces
@@ -94,14 +95,14 @@ module Cyclotone
           end
 
           if char.match?(/[0-9]/)
-            start_index = index
-            start_column = column
-            while index < input.length && input[index].match?(/[0-9.]/)
-              index += 1
-              column += 1
-            end
+            token, index, column = tokenize_number(input, index, line, column)
+            tokens << token
+            next
+          end
 
-            tokens << Token.new(type: :number, value: input[start_index...index], line: line, column: start_column)
+          if %w[" '].include?(char)
+            token, index, column = tokenize_quoted(input, index, line, column)
+            tokens << token
             next
           end
 
@@ -199,23 +200,29 @@ module Cyclotone
           node = case current.type
                  when :star
                    advance
-                   AST::Repeat.new(pattern: node, count: parse_integer)
+                   AST::Repeat.new(pattern: node, count: parse_positive_integer("repeat count"))
                  when :bang
                    advance
-                   AST::Replicate.new(pattern: node, count: parse_integer)
+                   AST::Replicate.new(pattern: node, count: parse_positive_integer("replicate count"))
                  when :slash
                    advance
-                   AST::Slow.new(pattern: node, amount: parse_number)
+                   AST::Slow.new(pattern: node, amount: parse_positive_number("slow amount"))
                  when :at
                    advance
-                   AST::Elongate.new(pattern: node, amount: parse_number)
+                   AST::Elongate.new(pattern: node, amount: parse_positive_number("elongate amount"))
                  when :question
                    advance
-                   probability = current.type == :number ? parse_number : 0.5
+                   probability = if current.type == :number
+                                   parse_probability
+                                 elsif implicit_probability_token?(current.type)
+                                   0.5
+                                 else
+                                   raise parse_error("probability must be between 0 and 1")
+                                 end
                    AST::Degrade.new(pattern: node, probability: probability)
                  when :colon
                    advance
-                   sample = parse_integer
+                   sample = parse_non_negative_integer("sample number")
                    unless node.is_a?(AST::Atom)
                      raise parse_error("sample suffix can only be applied to atoms")
                    end
@@ -264,13 +271,13 @@ module Cyclotone
 
       def parse_euclidean(node)
         expect(:lparen)
-        pulses = parse_integer
+        pulses = parse_non_negative_integer("euclidean pulses")
         expect(:comma)
-        steps = parse_integer
+        steps = parse_positive_integer("euclidean steps")
         rotation = 0
 
         if accept(:comma)
-          rotation = parse_integer
+          rotation = parse_integer("euclidean rotation")
         end
 
         expect(:rparen)
@@ -286,7 +293,7 @@ module Cyclotone
         end
 
         expect(:rbrace)
-        steps = accept(:percent) ? parse_integer : nil
+        steps = accept(:percent) ? parse_positive_integer("polymetric steps") : nil
 
         AST::Polymetric.new(patterns: patterns, steps: steps)
       end
@@ -297,8 +304,39 @@ module Cyclotone
         token.value.include?(".") ? token.value.to_f : token.value.to_i
       end
 
-      def parse_integer
-        expect(:number).value.to_i
+      def parse_integer(label = "integer")
+        token = expect(:number)
+        raise parse_error("#{label} must be an integer") if token.value.include?(".")
+
+        token.value.to_i
+      end
+
+      def parse_positive_number(label)
+        value = parse_number
+        raise parse_error("#{label} must be positive") unless value.positive?
+
+        value
+      end
+
+      def parse_probability
+        value = parse_number
+        raise parse_error("probability must be between 0 and 1") unless value.between?(0, 1)
+
+        value
+      end
+
+      def parse_positive_integer(label)
+        value = parse_integer(label)
+        raise parse_error("#{label} must be positive") unless value.positive?
+
+        value
+      end
+
+      def parse_non_negative_integer(label)
+        value = parse_integer(label)
+        raise parse_error("#{label} must be non-negative") if value.negative?
+
+        value
       end
 
       def build_group(elements)
@@ -343,7 +381,75 @@ module Cyclotone
       end
 
       def parse_error(message)
-        ParseError.new(message, line: current.line, column: current.column)
+        ParseError.new(message, line: current.line, column: current.column, source: @source)
+      end
+
+      def implicit_probability_token?(type)
+        %i[
+          space eof rbracket rangle rbrace comma pipe dot star bang slash at question colon lparen
+        ].include?(type)
+      end
+
+      def tokenize_number(input, index, line, column)
+        start_index = index
+        start_column = column
+
+        while index < input.length && input[index].match?(/[0-9]/)
+          index += 1
+          column += 1
+        end
+
+        if input[index] == "."
+          if input[index + 1]&.match?(/[0-9]/)
+            index += 1
+            column += 1
+
+            while index < input.length && input[index].match?(/[0-9]/)
+              index += 1
+              column += 1
+            end
+          else
+            raise ParseError.new("invalid number literal", line: line, column: column, source: @source)
+          end
+        end
+
+        if input[index] == "."
+          raise ParseError.new("invalid number literal", line: line, column: column, source: @source)
+        end
+
+        [Token.new(type: :number, value: input[start_index...index], line: line, column: start_column), index, column]
+      end
+
+      def tokenize_quoted(input, index, line, column)
+        quote = input[index]
+        start_column = column
+        index += 1
+        column += 1
+        value = +""
+
+        while index < input.length
+          char = input[index]
+
+          if char == quote
+            index += 1
+            column += 1
+            return [Token.new(type: :word, value: value, line: line, column: start_column), index, column]
+          end
+
+          if char == "\\"
+            index += 1
+            column += 1
+            raise ParseError.new("unterminated escape sequence", line: line, column: column, source: @source) if index >= input.length
+
+            char = input[index]
+          end
+
+          value << char
+          index += 1
+          column += 1
+        end
+
+        raise ParseError.new("unterminated quoted atom", line: line, column: start_column, source: @source)
       end
     end
   end
