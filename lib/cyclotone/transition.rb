@@ -66,13 +66,12 @@ module Cyclotone
 
       start_cycle = transition_start_cycle
       morphed = Pattern.new do |span|
-        anchor_times = [current, replacement].flat_map { |candidate| candidate.query_span(span) }.map do |event|
-          event.onset || event.part.start
-        end.uniq.sort
+        source_events = current.query_span(span)
+        target_events = replacement.query_span(span)
 
-        anchor_times.filter_map do |time|
-          source_event = current.query_event_at(time)
-          target_event = replacement.query_event_at(time)
+        transition_anchor_times(source_events, target_events).filter_map do |time|
+          source_event = event_at_time(source_events, time)
+          target_event = event_at_time(target_events, time)
           base_event = target_event || source_event
           next unless base_event
 
@@ -171,6 +170,14 @@ module Cyclotone
 
     def transition_progress(time, start_cycle, duration)
       ((time.to_f - start_cycle.to_f) / duration.to_f).clamp(0.0, 1.0)
+    end
+
+    def transition_anchor_times(source_events, target_events)
+      (source_events + target_events).map { |event| event.onset || event.part.start }.uniq.sort
+    end
+
+    def event_at_time(events, time)
+      events.find { |event| event.covers_time?(time) }
     end
 
     def clutch_source(slot_id, time, _value, start_cycle, duration)

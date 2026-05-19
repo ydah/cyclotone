@@ -48,6 +48,20 @@ RSpec.describe Cyclotone::Stream do
     expect(value[:gain]).to be_within(0.001).of(0.5)
   end
 
+  it "queries interpolate transition sources once per span" do
+    stream.reset_cycles
+    stream.set_cycle(0)
+    query_counts = Hash.new(0)
+    current = counting_anchor_pattern(query_counts, :current, 0)
+    replacement = counting_anchor_pattern(query_counts, :replacement, 8)
+
+    stream.p(:lead, current)
+    stream.interpolate_in(:lead, 4, replacement)
+    stream.slot(:lead).query_cycle(0)
+
+    expect(query_counts).to eq(current: 1, replacement: 1)
+  end
+
   it "fades active slots out over the requested number of cycles" do
     stream.reset_cycles
     stream.p(:lead, Cyclotone::Controls.s("bd").gain(1.0))
@@ -94,5 +108,18 @@ RSpec.describe Cyclotone::Stream do
 
     values = stream.slot(:lead).query_cycle(2).map { |event| event.value[:s] }
     expect(values).to include("sd", "hh")
+  end
+
+  def counting_anchor_pattern(query_counts, key, note_offset)
+    Cyclotone::Pattern.new do |span|
+      query_counts[key] += 1
+      [0, Rational(1, 4), Rational(1, 2), Rational(3, 4)].filter_map do |start|
+        whole = Cyclotone::TimeSpan.new(start, start + Rational(1, 8))
+        part = span.intersection(whole)
+        next unless part
+
+        Cyclotone::Event.new(whole: whole, part: part, value: { note: note_offset + (start * 8).to_i })
+      end
+    end
   end
 end
