@@ -254,6 +254,8 @@ module Cyclotone
       private_class_method :group_if_needed
 
       def format_atom(value)
+        return "#{value.numerator}/#{value.denominator}" if value.is_a?(Rational)
+
         text = value.to_s
         return text if text.match?(/\A[\w.-]+\z/)
 

@@ -17,4 +17,11 @@ RSpec.describe Cyclotone::MiniNotation::AST do
     expect(ast.to_mn).to eq('"kick/snare" bd*2')
     expect(Cyclotone::MiniNotation::Parser.new.parse(ast.to_mn)).to eq(ast)
   end
+
+  it "pretty-prints rational atoms without quoting them as strings" do
+    ast = Cyclotone::MiniNotation::Parser.new.parse("1/3")
+
+    expect(ast.to_mn).to eq("1/3")
+    expect(Cyclotone::MiniNotation::Parser.new.parse(ast.to_mn)).to eq(ast)
+  end
 end

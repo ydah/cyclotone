@@ -120,6 +120,18 @@ RSpec.describe Cyclotone::MiniNotation::Parser do
     expect { parser.parse("bd:1.5") }.to raise_error(Cyclotone::ParseError, /sample number/)
   end
 
+  it "parses signed numeric atoms and rational literals" do
+    expect(parser.parse("-1")).to eq(Cyclotone::MiniNotation::AST::Atom.new(value: -1))
+    expect(parser.parse("1/3")).to eq(Cyclotone::MiniNotation::AST::Atom.new(value: Rational(1, 3)))
+    expect(parser.parse("-2/5")).to eq(Cyclotone::MiniNotation::AST::Atom.new(value: Rational(-2, 5)))
+  end
+
+  it "rejects empty branches with specific errors" do
+    expect { parser.parse("bd |") }.to raise_error(Cyclotone::ParseError, /empty choice branch/)
+    expect { parser.parse("[bd,]") }.to raise_error(Cyclotone::ParseError, /empty stack branch/)
+    expect { parser.parse("{bd,}") }.to raise_error(Cyclotone::ParseError, /empty polymetric branch/)
+  end
+
   it "rejects invalid euclidean and polymetric counts" do
     expect { parser.parse("bd(3,0)") }.to raise_error(Cyclotone::ParseError, /euclidean steps/)
     expect { parser.parse("{bd sd}%0") }.to raise_error(Cyclotone::ParseError, /polymetric steps/)
@@ -129,6 +141,21 @@ RSpec.describe Cyclotone::MiniNotation::Parser do
     expect { parser.parse("[bd sd") }.to raise_error(Cyclotone::ParseError) do |error|
       expect(error.message).to include("[bd sd")
       expect(error.message).to include("^")
+    end
+  end
+
+  it "does not hang on random punctuation smoke input" do
+    alphabet = ["[", "]", "{", "}", "(", ")", "<", ">", ",", ".", "~", "*", "/", "!", "_", "@", "?", "|", ":", "%", "-", "1", "a", " "]
+    random = Random.new(1234)
+
+    100.times do
+      input = Array.new(24) { alphabet[random.rand(alphabet.length)] }.join
+
+      begin
+        parser.parse(input)
+      rescue Cyclotone::ParseError
+        nil
+      end
     end
   end
 end

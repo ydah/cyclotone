@@ -87,16 +87,16 @@ module Cyclotone
             next
           end
 
+          if char.match?(/[0-9]/) || (char == "-" && input[index + 1]&.match?(/[0-9]/))
+            token, index, column = tokenize_number(input, index, line, column)
+            tokens << token
+            next
+          end
+
           if SINGLE_CHAR_TOKENS.key?(char)
             tokens << Token.new(type: SINGLE_CHAR_TOKENS[char], value: char, line: line, column: column)
             index += 1
             column += 1
-            next
-          end
-
-          if char.match?(/[0-9]/)
-            token, index, column = tokenize_number(input, index, line, column)
-            tokens << token
             next
           end
 
@@ -131,6 +131,8 @@ module Cyclotone
 
         while accept(:comma)
           skip_spaces
+          raise parse_error("empty stack branch") if terminators.include?(current.type) || current.type == :comma
+
           patterns << parse_choice(terminators: terminators + [:comma])
           skip_spaces
         end
@@ -146,6 +148,8 @@ module Cyclotone
 
         while accept(:pipe)
           skip_spaces
+          raise parse_error("empty choice branch") if terminators.include?(current.type) || current.type == :pipe
+
           patterns << parse_sequence(terminators: terminators + [:pipe])
           skip_spaces
         end
@@ -247,8 +251,7 @@ module Cyclotone
           AST::Atom.new(value: token.value)
         when :number
           advance
-          numeric_value = token.value.include?(".") ? token.value.to_f : token.value.to_i
-          AST::Atom.new(value: numeric_value)
+          AST::Atom.new(value: number_value(token.value))
         when :tilde
           advance
           AST::Rest.new
@@ -286,9 +289,13 @@ module Cyclotone
 
       def parse_polymetric
         expect(:lbrace)
+        raise parse_error("empty polymetric branch") if current.type == :rbrace
+
         patterns = [parse_sequence(terminators: [:comma, :rbrace])]
 
         while accept(:comma)
+          raise parse_error("empty polymetric branch") if current.type == :comma || current.type == :rbrace
+
           patterns << parse_sequence(terminators: [:comma, :rbrace])
         end
 
@@ -301,12 +308,12 @@ module Cyclotone
       def parse_number
         token = expect(:number)
 
-        token.value.include?(".") ? token.value.to_f : token.value.to_i
+        number_value(token.value)
       end
 
       def parse_integer(label = "integer")
         token = expect(:number)
-        raise parse_error("#{label} must be an integer") if token.value.include?(".")
+        raise parse_error("#{label} must be an integer") if token.value.include?(".") || token.value.include?("/")
 
         token.value.to_i
       end
@@ -394,6 +401,11 @@ module Cyclotone
         start_index = index
         start_column = column
 
+        if input[index] == "-"
+          index += 1
+          column += 1
+        end
+
         while index < input.length && input[index].match?(/[0-9]/)
           index += 1
           column += 1
@@ -417,7 +429,29 @@ module Cyclotone
           raise ParseError.new("invalid number literal", line: line, column: column, source: @source)
         end
 
+        if input[index] == "/" && input[index + 1]&.match?(/[0-9]/)
+          index += 1
+          column += 1
+          denominator_start = index
+
+          while index < input.length && input[index].match?(/[0-9]/)
+            index += 1
+            column += 1
+          end
+
+          if input[denominator_start...index].to_i.zero?
+            raise ParseError.new("rational denominator must be positive", line: line, column: denominator_start + 1, source: @source)
+          end
+        end
+
         [Token.new(type: :number, value: input[start_index...index], line: line, column: start_column), index, column]
+      end
+
+      def number_value(value)
+        return Rational(value) if value.include?("/")
+        return value.to_f if value.include?(".")
+
+        value.to_i
       end
 
       def tokenize_quoted(input, index, line, column)
