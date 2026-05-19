@@ -22,4 +22,14 @@ RSpec.describe "alteration transforms" do
     expect(transformed.query_cycle(0).map(&:value)).to eq(%w[bd sd hh cp])
     expect(transformed.query_cycle(1).map(&:value)).to eq(%w[bd sd hh cp bd sd hh cp])
   end
+
+  it "validates alteration transform arguments" do
+    expect { base.every(0) { |pattern| pattern.rev } }.to raise_error(ArgumentError, /period/)
+    expect { base.sometimes_by(1.1) { |pattern| pattern.rev } }.to raise_error(ArgumentError, /probability/)
+    expect { base.degrade_by(-0.1) }.to raise_error(ArgumentError, /probability/)
+    expect { base.chunk(0) { |pattern| pattern.rev } }.to raise_error(ArgumentError, /count/)
+    expect { base.zoom(Rational(1, 2), Rational(1, 2)) }.to raise_error(ArgumentError, /zoom/)
+    expect { base.trunc(Rational(3, 2)) }.to raise_error(ArgumentError, /trunc/)
+    expect { base.spread(->(pattern, _factor) { pattern }, []) }.to raise_error(ArgumentError, /values/)
+  end
 end

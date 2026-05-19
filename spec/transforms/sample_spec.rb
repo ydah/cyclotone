@@ -30,4 +30,16 @@ RSpec.describe "sample transforms" do
     expect(values.length).to eq(4)
     expect(values.first).to be < values.last
   end
+
+  it "rejects invalid sample transform counts" do
+    expect { base.chop(0) }.to raise_error(ArgumentError, /count/)
+    expect { base.slice(0, Cyclotone::Pattern.pure(0)) }.to raise_error(ArgumentError, /count/)
+    expect { base.randslice(-1) }.to raise_error(ArgumentError, /count/)
+    expect { base.loop_at(0) }.to raise_error(ArgumentError, /cycles/)
+    expect { base.segment(0) }.to raise_error(ArgumentError, /count/)
+  end
+
+  it "drops slice events when the selector is silent" do
+    expect(base.slice(4, Cyclotone::Pattern.silence).query_cycle(0)).to eq([])
+  end
 end

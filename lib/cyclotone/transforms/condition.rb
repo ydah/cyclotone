@@ -4,12 +4,18 @@ module Cyclotone
   module Transforms
     module Condition
       def when_mod(period, minimum, &block)
+        normalized_period = Pattern.to_rational(period)
+        raise ArgumentError, "when_mod period must be positive" unless normalized_period.positive?
+        raise ArgumentError, "when_mod requires a block" unless block
+
         Pattern.new do |span|
-          (span.cycle_number % period) >= minimum ? block.call(self).query_span(span) : query_span(span)
+          (span.cycle_number % normalized_period) >= Pattern.to_rational(minimum) ? block.call(self).query_span(span) : query_span(span)
         end
       end
 
       def fix(control_pattern, &block)
+        raise ArgumentError, "fix requires a block" unless block
+
         transformed = block.call(self)
 
         Pattern.new do |span|
@@ -25,10 +31,15 @@ module Cyclotone
       end
 
       def unfix(control_pattern, &block)
+        raise ArgumentError, "unfix requires a block" unless block
+
         contrast(block, proc { |pattern| pattern }, control_pattern)
       end
 
       def contrast(true_function, false_function, control_pattern)
+        raise ArgumentError, "contrast requires a true function" unless true_function.respond_to?(:call)
+        raise ArgumentError, "contrast requires a false function" unless false_function.respond_to?(:call)
+
         true_pattern = true_function.call(self)
         false_pattern = false_function.call(self)
 
@@ -49,7 +60,7 @@ module Cyclotone
 
       def struct(bool_pattern)
         Pattern.ensure_pattern(bool_pattern).combine_left(self) do |gate, value|
-          gate ? value : nil
+          truthy?(gate) ? value : nil
         end.select_events { |event| !event.value.nil? }
       end
 

@@ -31,4 +31,18 @@ RSpec.describe "condition transforms" do
 
     expect(values).to eq(["bd"])
   end
+
+  it "treats zero as false in struct gates" do
+    structured = Cyclotone::Pattern.pure("bd").struct(Cyclotone::Pattern.mn("1 0 1 0"))
+
+    expect(structured.query_cycle(0).map(&:value)).to eq(%w[bd bd])
+  end
+
+  it "validates condition transform arguments" do
+    expect { base.when_mod(0, 0) { |pattern| pattern } }.to raise_error(ArgumentError, /period/)
+    expect { base.when_mod(2, 0) }.to raise_error(ArgumentError, /block/)
+    expect { base.fix(Cyclotone::Pattern.pure(true)) }.to raise_error(ArgumentError, /block/)
+    expect { base.unfix(Cyclotone::Pattern.pure(true)) }.to raise_error(ArgumentError, /block/)
+    expect { base.contrast(nil, proc { |pattern| pattern }, Cyclotone::Pattern.pure(true)) }.to raise_error(ArgumentError, /true function/)
+  end
 end

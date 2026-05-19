@@ -20,4 +20,18 @@ RSpec.describe "accumulation transforms" do
 
     expect(values.map { |value| value[:pan] }).to eq([0, 0, 1, 1])
   end
+
+  it "validates accumulation transform arguments" do
+    expect { base.superimpose }.to raise_error(ArgumentError, /block/)
+    expect { base.layer([]) }.to raise_error(ArgumentError, /functions/)
+    expect { base.jux_by(1) }.to raise_error(ArgumentError, /block/)
+    expect { base.weave_with(0, base, [->(pattern) { pattern }]) }.to raise_error(ArgumentError, /weave/)
+    expect { base.weave_with(1, base, []) }.to raise_error(ArgumentError, /functions/)
+  end
+
+  it "clamps jux pan values into the stereo range" do
+    pans = base.jux_by(3) { |pattern| pattern }.query_cycle(0).map { |event| event.value[:pan] }.uniq
+
+    expect(pans).to eq([0.0, 1.0])
+  end
 end

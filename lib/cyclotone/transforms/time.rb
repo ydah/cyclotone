@@ -5,6 +5,7 @@ module Cyclotone
     module Time
       def fast(amount)
         factor = Pattern.to_rational(amount)
+        raise ArgumentError, "fast amount must be positive" unless factor.positive?
 
         Pattern.new do |span|
           source_span = TimeSpan.new(span.start * factor, span.stop * factor)
@@ -16,7 +17,10 @@ module Cyclotone
       end
 
       def slow(amount)
-        fast(Rational(1, 1) / Pattern.to_rational(amount))
+        factor = Pattern.to_rational(amount)
+        raise ArgumentError, "slow amount must be positive" unless factor.positive?
+
+        fast(Rational(1, 1) / factor)
       end
 
       def early(amount)
@@ -63,12 +67,17 @@ module Cyclotone
       end
 
       def off(amount, &block)
+        raise ArgumentError, "off requires a block" unless block
+
         transformed = block.call(self).early(amount)
         Pattern.stack([self, transformed])
       end
 
       def swing(amount, div = 4)
-        step_shift = Pattern.to_rational(amount) / Pattern.to_rational(div)
+        normalized_div = Pattern.to_rational(div)
+        raise ArgumentError, "swing division must be positive" unless normalized_div.positive?
+
+        step_shift = Pattern.to_rational(amount) / normalized_div
 
         map_events do |event|
           next event unless event.onset
@@ -82,10 +91,14 @@ module Cyclotone
       end
 
       def inside(amount, &block)
+        raise ArgumentError, "inside requires a block" unless block
+
         slow(amount).then(&block).fast(amount)
       end
 
       def outside(amount, &block)
+        raise ArgumentError, "outside requires a block" unless block
+
         fast(amount).then(&block).slow(amount)
       end
     end

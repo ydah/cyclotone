@@ -32,4 +32,19 @@ RSpec.describe "time and alteration transforms" do
 
     expect(structured.query_cycle(0).map(&:value)).to eq(%w[bd bd])
   end
+
+  it "rejects non-positive time scaling amounts" do
+    expect { pattern.fast(0) }.to raise_error(ArgumentError, /fast amount/)
+    expect { pattern.slow(-1) }.to raise_error(ArgumentError, /slow amount/)
+  end
+
+  it "requires blocks for scoped time transforms" do
+    expect { pattern.off(Rational(1, 8)) }.to raise_error(ArgumentError, /block/)
+    expect { pattern.inside(2) }.to raise_error(ArgumentError, /block/)
+    expect { pattern.outside(2) }.to raise_error(ArgumentError, /block/)
+  end
+
+  it "rejects invalid swing divisions" do
+    expect { pattern.swing(0.1, 0) }.to raise_error(ArgumentError, /division/)
+  end
 end

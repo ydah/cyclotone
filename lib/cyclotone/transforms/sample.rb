@@ -4,9 +4,13 @@ module Cyclotone
   module Transforms
     module Sample
       def chop(count)
+        normalized_count = validate_positive_integer(count, "chop count")
+
         Pattern.fastcat(
-          Array.new(count) do |index|
-            merge(Controls.begin(index.to_f / count)).merge(Controls.end((index + 1).to_f / count))
+          Array.new(normalized_count) do |index|
+            merge(Controls.begin(Rational(index, normalized_count))).merge(
+              Controls.end(Rational(index + 1, normalized_count))
+            )
           end
         )
       end
@@ -16,11 +20,15 @@ module Cyclotone
       end
 
       def slice(count, pattern)
+        normalized_count = validate_positive_integer(count, "slice count")
         selection = Pattern.ensure_pattern(pattern)
 
         map_events do |event|
-          index = selection.query_point(event.onset || event.part.start).to_i % count
-          merge_controls(event, begin: index.to_f / count, end: (index + 1).to_f / count)
+          selected_value = selection.query_point(event.onset || event.part.start)
+          next nil if selected_value.nil?
+
+          index = selected_value.to_i % normalized_count
+          merge_controls(event, begin: Rational(index, normalized_count), end: Rational(index + 1, normalized_count))
         end
       end
 
@@ -37,22 +45,29 @@ module Cyclotone
       end
 
       def randslice(count)
+        normalized_count = validate_positive_integer(count, "randslice count")
+
         map_events do |event|
-          index = Support::Deterministic.int(count, :randslice, event.value, event.part.start)
-          merge_controls(event, begin: index.to_f / count, end: (index + 1).to_f / count)
+          index = Support::Deterministic.int(normalized_count, :randslice, event.value, event.part.start)
+          merge_controls(event, begin: Rational(index, normalized_count), end: Rational(index + 1, normalized_count))
         end
       end
 
       def loop_at(cycles)
-        merge(Controls.speed(1.0 / cycles.to_f))
+        normalized_cycles = Pattern.to_rational(cycles)
+        raise ArgumentError, "loop_at cycles must be positive" unless normalized_cycles.positive?
+
+        merge(Controls.speed(1.0 / normalized_cycles.to_f))
       end
 
       def segment(count)
+        normalized_count = validate_positive_integer(count, "segment count")
+
         Pattern.new do |span|
           cycle_start = Rational(span.cycle_number)
-          segment_length = Rational(1, count)
+          segment_length = Rational(1, normalized_count)
 
-          Array.new(count) { |index| index }.filter_map do |index|
+          Array.new(normalized_count) { |index| index }.filter_map do |index|
             segment_span = TimeSpan.new(
               cycle_start + (segment_length * index),
               cycle_start + (segment_length * (index + 1))
@@ -76,6 +91,15 @@ module Cyclotone
                        end
 
         event.with_value(merged_value)
+      end
+
+      def validate_positive_integer(value, label)
+        normalized = Integer(value)
+        raise ArgumentError, "#{label} must be positive" unless normalized.positive?
+
+        normalized
+      rescue ArgumentError, TypeError => error
+        raise ArgumentError, "invalid #{label}: #{error.message}"
       end
     end
   end
