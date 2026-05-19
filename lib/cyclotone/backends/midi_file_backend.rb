@@ -10,6 +10,10 @@ module Cyclotone
       DEFAULT_BPM = 120
       DEFAULT_PPQN = 480
       DEFAULT_TRACK_NAME = "Cyclotone"
+      TEMPO_EVENT_PRIORITY = -30
+      TIME_SIGNATURE_EVENT_PRIORITY = -20
+      TRACK_NAME_EVENT_PRIORITY = -10
+      END_OF_TRACK_PRIORITY = 99
 
       attr_reader :path, :channel, :ppqn, :bpm, :track_mode
 
@@ -27,13 +31,15 @@ module Cyclotone
         track_mode: :single
       )
         @path = path
-        @bpm = bpm.to_f
-        @ppqn = ppqn.to_i
+        @bpm = normalize_bpm(bpm)
+        @ppqn = normalize_positive_integer(ppqn, "ppqn")
         @channel = channel.to_i
         @track_name = track_name.to_s
-        @time_signature = time_signature
+        @time_signature = normalize_time_signature(time_signature)
         @track_mode = track_mode.to_sym
         @messages = []
+        @tempo_changes = []
+        @time_signature_changes = []
         @origin_time = nil
       end
 
@@ -48,7 +54,20 @@ module Cyclotone
 
       def clear
         @messages.clear
+        @tempo_changes.clear
+        @time_signature_changes.clear
         @origin_time = nil
+        self
+      end
+
+      def tempo_change(at:, bpm:)
+        @tempo_changes << { at: at.to_f, bpm: normalize_bpm(bpm) }
+        self
+      end
+
+      def time_signature_change(at:, numerator:, denominator:)
+        signature = normalize_time_signature([numerator, denominator])
+        @time_signature_changes << { at: at.to_f, signature: signature }
         self
       end
 
@@ -133,16 +152,38 @@ module Cyclotone
 
       def track_events(messages, track_name)
         events = [
-          { tick: 0, priority: 0, data: tempo_event },
-          { tick: 0, priority: 1, data: time_signature_event },
-          { tick: 0, priority: 2, data: track_name_event(track_name) }
+          { tick: 0, priority: TEMPO_EVENT_PRIORITY, data: tempo_event(bpm) },
+          { tick: 0, priority: TIME_SIGNATURE_EVENT_PRIORITY, data: time_signature_event(@time_signature) },
+          { tick: 0, priority: TRACK_NAME_EVENT_PRIORITY, data: track_name_event(track_name) }
         ]
 
+        events.concat(tempo_change_events)
+        events.concat(time_signature_change_events)
         events.concat(messages.map { |message| channel_track_event(message) })
 
         end_tick = events.map { |event| event[:tick] }.max || 0
-        events << { tick: end_tick, priority: 99, data: end_of_track_event }
+        events << { tick: end_tick, priority: END_OF_TRACK_PRIORITY, data: end_of_track_event }
         events.sort_by { |event| [event[:tick], event[:priority]] }
+      end
+
+      def tempo_change_events
+        @tempo_changes.map do |change|
+          {
+            tick: seconds_to_ticks(change[:at] - origin_time),
+            priority: TEMPO_EVENT_PRIORITY,
+            data: tempo_event(change[:bpm])
+          }
+        end
+      end
+
+      def time_signature_change_events
+        @time_signature_changes.map do |change|
+          {
+            tick: seconds_to_ticks(change[:at] - origin_time),
+            priority: TIME_SIGNATURE_EVENT_PRIORITY,
+            data: time_signature_event(change[:signature])
+          }
+        end
       end
 
       def channel_track_event(message)
@@ -168,8 +209,32 @@ module Cyclotone
       end
 
       def seconds_to_ticks(seconds)
-        beats = [seconds.to_f, 0.0].max * bpm / 60.0
+        elapsed = [seconds.to_f, 0.0].max
+        current_bpm = bpm
+        previous_elapsed = 0.0
+        beats = 0.0
+
+        sorted_tempo_changes.each do |change|
+          change_elapsed = change[:at] - origin_time
+
+          if change_elapsed <= previous_elapsed
+            current_bpm = change[:bpm]
+            next
+          end
+
+          break if change_elapsed >= elapsed
+
+          beats += (change_elapsed - previous_elapsed) * current_bpm / 60.0
+          previous_elapsed = change_elapsed
+          current_bpm = change[:bpm]
+        end
+
+        beats += (elapsed - previous_elapsed) * current_bpm / 60.0
         (beats * ppqn).round
+      end
+
+      def sorted_tempo_changes
+        @tempo_changes.sort_by { |change| change[:at] }
       end
 
       def channel_event_data(message)
@@ -187,8 +252,8 @@ module Cyclotone
         end
       end
 
-      def tempo_event
-        microseconds = (60_000_000 / bpm).round.clamp(1, 0xFF_FF_FF)
+      def tempo_event(bpm_value)
+        microseconds = (60_000_000 / bpm_value).round.clamp(1, 0xFF_FF_FF)
         "\xFF\x51\x03".b << [
           (microseconds >> 16) & 0xFF,
           (microseconds >> 8) & 0xFF,
@@ -207,14 +272,47 @@ module Cyclotone
         slot_id || :default
       end
 
-      def time_signature_event
-        numerator, denominator = @time_signature
-        exponent = Math.log2(denominator.to_i).to_i
-        "\xFF\x58\x04".b << [numerator.to_i, exponent, 24, 8].pack("C4")
+      def time_signature_event(signature)
+        numerator, denominator = signature
+        exponent = denominator.bit_length - 1
+        "\xFF\x58\x04".b << [numerator, exponent, 24, 8].pack("C4")
       end
 
       def end_of_track_event
         "\xFF\x2F\x00".b
+      end
+
+      def normalize_bpm(value)
+        normalized = Float(value)
+        return normalized if normalized.positive? && normalized.finite?
+
+        raise ArgumentError, "bpm must be positive"
+      rescue TypeError
+        raise ArgumentError, "bpm must be numeric"
+      end
+
+      def normalize_positive_integer(value, name)
+        normalized = Integer(value)
+        return normalized if normalized.positive?
+
+        raise ArgumentError, "#{name} must be positive"
+      rescue TypeError
+        raise ArgumentError, "#{name} must be an integer"
+      end
+
+      def normalize_time_signature(signature)
+        values = Array(signature)
+        raise ArgumentError, "time_signature must contain numerator and denominator" unless values.length == 2
+
+        numerator = normalize_positive_integer(values[0], "time_signature numerator")
+        denominator = normalize_positive_integer(values[1], "time_signature denominator")
+        return [numerator, denominator] if power_of_two?(denominator)
+
+        raise ArgumentError, "time_signature denominator must be a power of two"
+      end
+
+      def power_of_two?(value)
+        value.nobits?(value - 1)
       end
 
       def encode_variable_length(value)

@@ -56,6 +56,39 @@ RSpec.describe Cyclotone::Backends::MIDIFileBackend do
     expect(described_class.bpm_from_cps(0.5, beats_per_cycle: 4)).to eq(120.0)
   end
 
+  it "writes tempo and time signature changes into the midi tempo map" do
+    backend = described_class.new(path: output_path, bpm: 120)
+    event = Cyclotone::Event.new(
+      whole: Cyclotone::TimeSpan.new(1, 2),
+      part: Cyclotone::TimeSpan.new(1, 2),
+      value: { note: 67, velocity: 90, sustain: 0.25 }
+    )
+
+    backend.begin_capture(at: 10.0)
+    backend.tempo_change(at: 10.5, bpm: 60)
+    backend.time_signature_change(at: 11.0, numerator: 3, denominator: 8)
+    backend.send_event(event, at: 11.0)
+    data = backend.midi_file_data
+
+    expect(data.scan("\xFF\x51\x03".b).length).to eq(2)
+    expect(data).to include([0xFF, 0x51, 0x03, 0x0F, 0x42, 0x40].pack("C*"))
+    expect(data).to include([0xFF, 0x58, 0x04, 3, 3, 24, 8].pack("C*"))
+    expect(data).to include([0x81, 0x70, 0xFF, 0x58, 0x04, 3, 3, 24, 8, 0x00, 0x90, 67, 90].pack("C*"))
+  end
+
+  it "rejects invalid tempo and time signature metadata" do
+    backend = described_class.new(path: output_path, bpm: 120)
+
+    expect { described_class.new(path: output_path, bpm: 0) }.to raise_error(ArgumentError, /bpm/)
+    expect { backend.tempo_change(at: 0.0, bpm: 0) }.to raise_error(ArgumentError, /bpm/)
+    expect do
+      described_class.new(path: output_path, time_signature: [4, 3])
+    end.to raise_error(ArgumentError, /power of two/)
+    expect do
+      backend.time_signature_change(at: 0.0, numerator: 0, denominator: 4)
+    end.to raise_error(ArgumentError, /numerator/)
+  end
+
   it "writes when used through scheduler render" do
     backend = described_class.new(path: output_path, bpm: 120)
     scheduler = Cyclotone::Scheduler.new(cps: 1, backend: backend)
