@@ -1,0 +1,49 @@
+module Cyclotone
+  class TimeSpan
+    attr_reader start: Rational
+    attr_reader stop: Rational
+
+    def initialize: (untyped start_time, untyped stop_time) -> void
+    def duration: () -> Rational
+    def midpoint: () -> Rational
+    def cycle_number: () -> Integer
+    def intersection: (untyped other) -> TimeSpan?
+    def includes?: (untyped time) -> bool
+    def cycle_spans: (?max_cycles: Integer?) -> Array[TimeSpan]
+    def each_cycle_span: (?max_cycles: Integer?) { (TimeSpan) -> void } -> self
+  end
+
+  class Event
+    attr_reader whole: TimeSpan?
+    attr_reader part: TimeSpan
+    attr_reader value: untyped
+
+    def initialize: (whole: TimeSpan?, part: TimeSpan, value: untyped) -> void
+    def onset: () -> Rational?
+    def offset: () -> Rational?
+    def duration: () -> Rational?
+    def active_span: () -> TimeSpan
+    def with_value: (untyped new_value) -> Event
+    def with_span: (?new_whole: TimeSpan?, ?new_part: TimeSpan, ?whole: TimeSpan?, ?part: TimeSpan) -> Event
+    def to_h: () -> Hash[Symbol, untyped]
+  end
+
+  class Pattern
+    def initialize: (?continuous: bool) { (TimeSpan) -> Array[Event] } -> void
+    def continuous?: () -> bool
+    def query_span: (untyped span) -> Array[Event]
+    def query_cycle: (Integer cycle_number) -> Array[Event]
+    def query_point: (untyped time) -> untyped
+    def query_points: (untyped time) -> Array[untyped]
+    def fmap: () { (untyped) -> untyped } -> Pattern
+    def merge: (untyped other) -> Pattern
+
+    def self.pure: (untyped value) -> Pattern
+    def self.silence: () -> Pattern
+    def self.mn: (String string) -> Pattern
+    def self.try_mn: (String string) -> Pattern?
+    def self.fastcat: (Array[untyped] patterns) -> Pattern
+    def self.cat: (Array[untyped] patterns) -> Pattern
+    def self.stack: (Array[untyped] patterns, ?empty: Symbol) -> Pattern
+  end
+end

@@ -1,0 +1,78 @@
+AllCops:
+  NewCops: enable
+  TargetRubyVersion: 3.1
+  SuggestExtensions: false
+  Exclude:
+    - "coverage/**/*"
+    - "examples/**/*"
+    - "spec/**/*"
+    - "tmp/**/*"
+
+Style/StringLiterals:
+  EnforcedStyle: double_quotes
+
+Style/StringLiteralsInInterpolation:
+  Enabled: false
+
+Style/Documentation:
+  Enabled: false
+
+Style/ArgumentsForwarding:
+  Enabled: false
+
+Style/MixinUsage:
+  Enabled: false
+
+Style/MultilineBlockChain:
+  Enabled: false
+
+Style/OneClassPerFile:
+  Enabled: false
+
+Naming/AccessorMethodName:
+  Enabled: false
+
+Naming/BlockForwarding:
+  Enabled: false
+
+Naming/PredicateMethod:
+  Enabled: false
+
+Naming/PredicatePrefix:
+  Enabled: false
+
+Naming/RescuedExceptionsVariableName:
+  PreferredName: error
+
+Layout/LineLength:
+  Max: 140
+
+Layout/MultilineMethodCallIndentation:
+  EnforcedStyle: indented
+
+Metrics/AbcSize:
+  Enabled: false
+
+Metrics/BlockNesting:
+  Enabled: false
+
+Metrics/BlockLength:
+  Enabled: false
+
+Metrics/ClassLength:
+  Enabled: false
+
+Metrics/CyclomaticComplexity:
+  Enabled: false
+
+Metrics/ModuleLength:
+  Enabled: false
+
+Metrics/MethodLength:
+  Enabled: false
+
+Metrics/ParameterLists:
+  Enabled: false
+
+Metrics/PerceivedComplexity:
+  Enabled: false
