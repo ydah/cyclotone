@@ -87,6 +87,32 @@ RSpec.describe Cyclotone::Backends::MIDIBackend do
     expect(cc_messages.first[:value]).to eq(1)
   end
 
+  it "can reject controls that the midi backend does not consume" do
+    backend = described_class.new(output: output, unsupported_controls: :error)
+    event = Cyclotone::Event.new(
+      whole: Cyclotone::TimeSpan.new(0, 1),
+      part: Cyclotone::TimeSpan.new(0, 1),
+      value: { note: 60, cutoff: 800 }
+    )
+
+    expect { backend.messages_for(event) }.to raise_error(Cyclotone::InvalidControlError, /cutoff/)
+  end
+
+  it "makes fractional midi note quantization explicit" do
+    floor_backend = described_class.new(output: output)
+    round_backend = described_class.new(output: output, fractional_notes: :round)
+    strict_backend = described_class.new(output: output, fractional_notes: :error)
+    event = Cyclotone::Event.new(
+      whole: Cyclotone::TimeSpan.new(0, 1),
+      part: Cyclotone::TimeSpan.new(0, 1),
+      value: { note: 60.75 }
+    )
+
+    expect(floor_backend.messages_for(event).first[:note]).to eq(60)
+    expect(round_backend.messages_for(event).first[:note]).to eq(61)
+    expect { strict_backend.messages_for(event) }.to raise_error(Cyclotone::InvalidControlError, /fractional/)
+  end
+
   it "lists and selects available MIDI outputs when UniMIDI is present" do
     first = Struct.new(:name).new("Device A")
     unimidi_output = Class.new do

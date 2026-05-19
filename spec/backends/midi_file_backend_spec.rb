@@ -89,6 +89,17 @@ RSpec.describe Cyclotone::Backends::MIDIFileBackend do
     end.to raise_error(ArgumentError, /numerator/)
   end
 
+  it "uses the shared midi control policy" do
+    backend = described_class.new(path: output_path, unsupported_controls: :error, fractional_notes: :error)
+    event = Cyclotone::Event.new(
+      whole: Cyclotone::TimeSpan.new(0, 1),
+      part: Cyclotone::TimeSpan.new(0, 1),
+      value: { note: 60.5, room: 0.3 }
+    )
+
+    expect { backend.send_event(event, at: 0.0) }.to raise_error(Cyclotone::ConnectionError, /room/)
+  end
+
   it "writes when used through scheduler render" do
     backend = described_class.new(path: output_path, bpm: 120)
     scheduler = Cyclotone::Scheduler.new(cps: 1, backend: backend)

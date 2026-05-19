@@ -16,11 +16,21 @@ module Cyclotone
 
       attr_reader :channel
 
-      def initialize(device_name: nil, channel: 0, output: nil, schedule: false, strict_output: false)
+      def initialize(
+        device_name: nil,
+        channel: 0,
+        output: nil,
+        schedule: false,
+        strict_output: false,
+        unsupported_controls: :ignore,
+        fractional_notes: :floor
+      )
         @channel = channel.to_i
         @output = output || detect_output(device_name)
         @schedule = schedule
         @strict_output = strict_output
+        @unsupported_controls = normalize_unsupported_control_policy(unsupported_controls)
+        @fractional_notes = normalize_fractional_note_policy(fractional_notes)
         @queue_mutex = Mutex.new
         @queue_cv = ConditionVariable.new
         @scheduled_messages = []

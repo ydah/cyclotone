@@ -79,7 +79,9 @@ module Cyclotone
         ?channel: untyped,
         ?track_name: untyped,
         ?time_signature: untyped,
-        ?track_mode: untyped
+        ?track_mode: untyped,
+        ?unsupported_controls: untyped,
+        ?fractional_notes: untyped
       ) -> void
       def begin_capture: (at: untyped) -> self
       def end_capture: () -> self

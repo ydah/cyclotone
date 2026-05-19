@@ -28,7 +28,9 @@ module Cyclotone
         channel: 0,
         track_name: DEFAULT_TRACK_NAME,
         time_signature: [4, 4],
-        track_mode: :single
+        track_mode: :single,
+        unsupported_controls: :ignore,
+        fractional_notes: :floor
       )
         @path = path
         @bpm = normalize_bpm(bpm)
@@ -37,6 +39,8 @@ module Cyclotone
         @track_name = track_name.to_s
         @time_signature = normalize_time_signature(time_signature)
         @track_mode = track_mode.to_sym
+        @unsupported_controls = normalize_unsupported_control_policy(unsupported_controls)
+        @fractional_notes = normalize_fractional_note_policy(fractional_notes)
         @messages = []
         @tempo_changes = []
         @time_signature_changes = []

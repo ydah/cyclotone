@@ -55,7 +55,7 @@ module Cyclotone
       ring: { type: :float },
       ringf: { type: :float },
       ringdf: { type: :float },
-      note: { type: :integer_or_array },
+      note: { type: :numeric_or_array },
       velocity: { type: :integer, default: 100, range: 0..127 },
       sustain: { type: :float, default: 1.0 },
       channel: { type: :integer, default: 0, range: 0..15 },
@@ -135,7 +135,7 @@ module Cyclotone
       case type
       when :integer, :float
         raise InvalidControlError, "#{control_name} must be numeric" unless value.is_a?(Numeric)
-      when :integer_or_array
+      when :numeric_or_array
         values = value.is_a?(Array) ? value : [value]
         raise InvalidControlError, "#{control_name} must be numeric" unless values.all?(Numeric)
       when :hash

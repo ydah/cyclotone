@@ -38,4 +38,10 @@ RSpec.describe Cyclotone::Controls do
     expect { described_class.channel(16).query_cycle(0) }.to raise_error(Cyclotone::InvalidControlError, /channel/)
     expect { described_class.cc({ 128 => 1 }).query_cycle(0) }.to raise_error(Cyclotone::InvalidControlError, /controllers/)
   end
+
+  it "allows fractional note controls for non-midi or explicitly quantized midi use" do
+    value = described_class.note(60.5).query_cycle(0).first.value
+
+    expect(value[:note]).to eq(60.5)
+  end
 end
