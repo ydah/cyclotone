@@ -40,7 +40,7 @@ module Cyclotone
 
       Pattern.continuous do |time|
         cycle = time.floor
-        step = ((cycle_position(time) * normalized_steps).floor).to_i
+        step = (cycle_position(time) * normalized_steps).floor.to_i
         Support::Deterministic.float(:rand, cycle, step)
       end
     end
@@ -174,7 +174,7 @@ module Cyclotone
       right = anchors.find { |anchor| anchor[:time] >= time } || anchors.last
       return left[:value] if left[:time] == right[:time]
 
-      amount = (time - left[:time]).to_f / (right[:time] - left[:time]).to_f
+      amount = (time - left[:time]).to_f / (right[:time] - left[:time])
       interpolate_value(left[:value], right[:value], amount)
     end
     private_class_method :interpolate
@@ -202,13 +202,15 @@ module Cyclotone
     private_class_method :interpolate_value
 
     def interpolate_hash(left, right, amount)
-      (left.keys | right.keys).each_with_object({}) do |key, result|
-        result[key] =
+      (left.keys | right.keys).to_h do |key|
+        value =
           if left.key?(key) && right.key?(key)
             interpolate_value(left[key], right[key], amount)
           else
             amount >= 0.5 ? right.fetch(key, left[key]) : left.fetch(key, right[key])
           end
+
+        [key, value]
       end
     end
     private_class_method :interpolate_hash

@@ -57,7 +57,7 @@ module Cyclotone
         when Integer
           "int:#{value}"
         when Float
-          "float:#{value.to_s}"
+          "float:#{value}"
         when Symbol
           "sym:#{value}"
         when String

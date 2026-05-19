@@ -1,14 +1,18 @@
 # frozen_string_literal: true
 
-begin
+SIMPLECOV_AVAILABLE = begin
   require "simplecov"
+  true
+rescue LoadError
+  false
+end unless defined?(SIMPLECOV_AVAILABLE)
 
+if SIMPLECOV_AVAILABLE
   SimpleCov.start do
     enable_coverage :branch
     add_filter "/spec/"
     minimum_coverage line: 80, branch: 55
   end
-rescue LoadError
 end
 
 require "cyclotone"

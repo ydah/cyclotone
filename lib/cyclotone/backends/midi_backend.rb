@@ -1,17 +1,18 @@
 # frozen_string_literal: true
 
 require_relative "midi_message_support"
-require "thread"
-
-begin
-  require "unimidi"
-rescue LoadError
-end
 
 module Cyclotone
   module Backends
     class MIDIBackend
       include MIDIMessageSupport
+
+      UNIMIDI_AVAILABLE = begin
+        require "unimidi"
+        true
+      rescue LoadError
+        false
+      end
 
       attr_reader :channel
 
@@ -28,7 +29,7 @@ module Cyclotone
 
       class << self
         def available_outputs
-          return [] unless defined?(UniMIDI)
+          return [] unless UNIMIDI_AVAILABLE || defined?(UniMIDI::Output)
 
           UniMIDI::Output.all
         rescue StandardError
@@ -132,7 +133,7 @@ module Cyclotone
         @queue_mutex.synchronize do
           messages.each do |message|
             scheduled_time = at + message.fetch(:delay, 0).to_f
-            @scheduled_messages << message.reject { |key, _| key == :delay }.merge(at: scheduled_time)
+            @scheduled_messages << message.except(:delay).merge(at: scheduled_time)
           end
 
           @scheduled_messages.sort_by! { |message| message[:at] }
@@ -169,11 +170,9 @@ module Cyclotone
             end
 
             wait_time = @scheduled_messages.first[:at] - Time.now.to_f
-            if wait_time.positive?
-              @queue_cv.wait(@queue_mutex, wait_time)
-            else
-              return @scheduled_messages.shift
-            end
+            return @scheduled_messages.shift unless wait_time.positive?
+
+            @queue_cv.wait(@queue_mutex, wait_time)
           end
         end
       end

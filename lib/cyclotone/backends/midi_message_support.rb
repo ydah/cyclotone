@@ -52,7 +52,7 @@ module Cyclotone
 
       def extract_sustain(values, event, cps)
         if values.key?(:sustain_cycles)
-          return values[:sustain_cycles].to_f / cps.to_f if cps.to_f.positive?
+          return values[:sustain_cycles].to_f / cps if cps.to_f.positive?
 
           return values[:sustain_cycles].to_f
         end

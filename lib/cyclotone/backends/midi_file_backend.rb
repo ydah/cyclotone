@@ -17,7 +17,15 @@ module Cyclotone
         cps.to_f * 60.0 * beats_per_cycle.to_f
       end
 
-      def initialize(path:, bpm: DEFAULT_BPM, ppqn: DEFAULT_PPQN, channel: 0, track_name: DEFAULT_TRACK_NAME, time_signature: [4, 4], track_mode: :single)
+      def initialize(
+        path:,
+        bpm: DEFAULT_BPM,
+        ppqn: DEFAULT_PPQN,
+        channel: 0,
+        track_name: DEFAULT_TRACK_NAME,
+        time_signature: [4, 4],
+        track_mode: :single
+      )
         @path = path
         @bpm = bpm.to_f
         @ppqn = ppqn.to_i
@@ -86,7 +94,7 @@ module Cyclotone
 
       def normalize_message(message, capture_time, slot_id)
         timestamp = capture_time + message.fetch(:delay, 0).to_f
-        message.reject { |key, _| key == :delay }.merge(at: timestamp, track: track_key(slot_id))
+        message.except(:delay).merge(at: timestamp, track: track_key(slot_id))
       end
 
       def header_chunk(track_count)

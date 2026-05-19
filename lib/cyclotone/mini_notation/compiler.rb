@@ -23,9 +23,7 @@ module Cyclotone
         when AST::Replicate
           validate_expansion_count(node.count, "replicate count")
           Pattern.timecat(Array.new(node.count) { [1, compile(node.pattern)] })
-        when AST::Slow
-          compile(node.pattern).slow(node.amount)
-        when AST::Elongate
+        when AST::Slow, AST::Elongate
           compile(node.pattern).slow(node.amount)
         when AST::Degrade
           compile(node.pattern).degrade_by(node.probability)
@@ -97,8 +95,6 @@ module Cyclotone
 
       def step_count(node)
         case node
-        when AST::Atom, AST::Rest
-          1
         when AST::Sequence
           node.elements.sum { |element| step_count(element) }
         when AST::Stack, AST::Alternating, AST::Choice

@@ -136,13 +136,11 @@ module Cyclotone
 
     def validate_type(control_name, value, type)
       case type
-      when :integer
+      when :integer, :float
         raise InvalidControlError, "#{control_name} must be numeric" unless value.is_a?(Numeric)
       when :integer_or_array
         values = value.is_a?(Array) ? value : [value]
-        raise InvalidControlError, "#{control_name} must be numeric" unless values.all? { |entry| entry.is_a?(Numeric) }
-      when :float
-        raise InvalidControlError, "#{control_name} must be numeric" unless value.is_a?(Numeric)
+        raise InvalidControlError, "#{control_name} must be numeric" unless values.all?(Numeric)
       when :hash
         validate_cc(value) if control_name == :cc
       end
@@ -166,13 +164,9 @@ module Cyclotone
       raise InvalidControlError, "cc must be a Hash" unless value.is_a?(Hash)
 
       value.each do |controller, amount|
-        unless controller.is_a?(Numeric) && controller.between?(0, 127)
-          raise InvalidControlError, "cc controllers must be within 0..127"
-        end
+        raise InvalidControlError, "cc controllers must be within 0..127" unless controller.is_a?(Numeric) && controller.between?(0, 127)
 
-        unless amount.is_a?(Numeric) && amount.between?(0, 127)
-          raise InvalidControlError, "cc values must be within 0..127"
-        end
+        raise InvalidControlError, "cc values must be within 0..127" unless amount.is_a?(Numeric) && amount.between?(0, 127)
       end
     end
   end

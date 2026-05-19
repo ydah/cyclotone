@@ -17,10 +17,12 @@ module Cyclotone
 
       start_cycle = transition_start_cycle
 
-      mixed = Pattern.stack([
-        apply_gain_envelope(current, start_cycle: start_cycle, duration: duration, direction: :out),
-        apply_gain_envelope(replacement, start_cycle: start_cycle, duration: duration, direction: :in)
-      ])
+      mixed = Pattern.stack(
+        [
+          apply_gain_envelope(current, start_cycle: start_cycle, duration: duration, direction: :out),
+          apply_gain_envelope(replacement, start_cycle: start_cycle, duration: duration, direction: :in)
+        ]
+      )
 
       assign_transition(slot_id, mixed, replacement: replacement, finish_cycle: start_cycle + duration)
     end
@@ -107,7 +109,7 @@ module Cyclotone
       duration = Pattern.to_rational(cycles)
       return self if duration <= 0
 
-      @slots.keys.each do |slot_id|
+      @slots.each_key do |slot_id|
         replacement = @slots.fetch(slot_id)
         assign_transition(
           slot_id,
@@ -125,7 +127,7 @@ module Cyclotone
       duration = Pattern.to_rational(cycles)
       return self if duration <= 0
 
-      @slots.keys.each do |slot_id|
+      @slots.each_key do |slot_id|
         assign_transition(
           slot_id,
           apply_gain_envelope(@slots.fetch(slot_id), start_cycle: start_cycle, duration: duration, direction: :out),
@@ -171,7 +173,7 @@ module Cyclotone
       ((time.to_f - start_cycle.to_f) / duration.to_f).clamp(0.0, 1.0)
     end
 
-    def clutch_source(slot_id, time, value, start_cycle, duration)
+    def clutch_source(slot_id, time, _value, start_cycle, duration)
       progress = transition_progress(time, start_cycle, duration)
       chosen = Support::Deterministic.float(:clutch, slot_id, time) < progress
 
@@ -192,13 +194,15 @@ module Cyclotone
     end
 
     def interpolate_hash(source, target, progress)
-      (source.keys | target.keys).each_with_object({}) do |key, result|
-        result[key] =
+      (source.keys | target.keys).to_h do |key|
+        value =
           if source.key?(key) && target.key?(key)
             interpolate_value(source[key], target[key], progress)
           else
             progress < 0.5 ? source.fetch(key, target[key]) : target.fetch(key, source[key])
           end
+
+        [key, value]
       end
     end
   end

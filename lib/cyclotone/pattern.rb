@@ -443,9 +443,7 @@ module Cyclotone
         @mn_cache[source] = pattern
         @mn_cache_order << source
 
-        while @mn_cache_order.length > CACHE_LIMIT
-          @mn_cache.delete(@mn_cache_order.shift)
-        end
+        @mn_cache.delete(@mn_cache_order.shift) while @mn_cache_order.length > CACHE_LIMIT
 
         pattern
       end
@@ -465,10 +463,12 @@ module Cyclotone
     end
 
     def combine_scalar(left, right, operator)
+      return left if right.nil?
+
       if left.is_a?(Hash) && right.is_a?(Hash)
         keys = left.keys | right.keys
-        keys.each_with_object({}) do |key, result|
-          result[key] =
+        keys.to_h do |key|
+          value =
             if left.key?(key) && right.key?(key) && right[key].nil?
               left[key]
             elsif left.key?(key) && right.key?(key) && left[key].respond_to?(operator)
@@ -476,9 +476,9 @@ module Cyclotone
             else
               right.fetch(key, left[key])
             end
+
+          [key, value]
         end
-      elsif right.nil?
-        left
       elsif left.respond_to?(operator)
         left.public_send(operator, right)
       else
@@ -488,7 +488,7 @@ module Cyclotone
 
     def merge_values(left, right)
       if left.is_a?(Hash) && right.is_a?(Hash)
-        left.merge(right.reject { |_key, value| value.nil? })
+        left.merge(right.compact)
       elsif right.nil?
         left
       else

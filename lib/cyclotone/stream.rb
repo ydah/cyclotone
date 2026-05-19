@@ -14,6 +14,8 @@ module Cyclotone
 
     attr_reader :scheduler, :fallback_error
 
+    NullBackend = Backends::NullBackend
+
     def initialize(backend: nil, scheduler: nil)
       @slots = {}
       @slot_options = {}
@@ -38,12 +40,12 @@ module Cyclotone
     def hush(mode: :silence)
       case mode
       when :silence
-        @slots.keys.each { |slot_id| assign(slot_id, Pattern.silence) }
+        @slots.each_key { |slot_id| assign(slot_id, Pattern.silence) }
       when :mute
         @muted.merge(@slots.keys)
         sync_scheduler
       when :clear
-        @slots.keys.each { |slot_id| @scheduler.remove_pattern(slot_id) }
+        @slots.each_key { |slot_id| @scheduler.remove_pattern(slot_id) }
         @slots.clear
         @slot_options.clear
         @transitions.clear
@@ -208,7 +210,7 @@ module Cyclotone
 
     def active_slots
       if @soloed.empty?
-        @slots.reject { |slot_id, _| @muted.include?(slot_id) }
+        @slots.except(*@muted)
       else
         @slots.select { |slot_id, _| @soloed.include?(slot_id) && !@muted.include?(slot_id) }
       end
@@ -224,7 +226,5 @@ module Cyclotone
       sleep(seconds) if seconds.positive?
       self
     end
-
-    NullBackend = Backends::NullBackend
   end
 end

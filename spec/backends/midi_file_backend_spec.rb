@@ -1,10 +1,12 @@
 # frozen_string_literal: true
 
+require "fileutils"
+
 RSpec.describe Cyclotone::Backends::MIDIFileBackend do
   let(:output_path) { File.join(Dir.pwd, "tmp", "spec-midi-output.mid") }
 
   after do
-    File.delete(output_path) if File.exist?(output_path)
+    FileUtils.rm_f(output_path)
   end
 
   it "encodes note and control events into a midi file" do

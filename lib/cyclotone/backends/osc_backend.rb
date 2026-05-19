@@ -20,7 +20,14 @@ module Cyclotone
         end
       end
 
-      def initialize(host: "127.0.0.1", port: 57_120, address: "/dirt/play", socket: nil, socket_factory: nil, retries: 1)
+      def initialize(
+        host: "127.0.0.1",
+        port: 57_120,
+        address: "/dirt/play",
+        socket: nil,
+        socket_factory: nil,
+        retries: 1
+      )
         @host = host
         @port = port
         @address = address
@@ -113,7 +120,7 @@ module Cyclotone
         return nil unless event.offset
         return event.offset.to_f if cps.nil? || event.duration.nil?
 
-        at.to_f + (event.duration.to_f / cps.to_f)
+        at.to_f + (event.duration.to_f / cps)
       end
 
       def encode_message(address, arguments)
@@ -148,8 +155,6 @@ module Cyclotone
           [argument].pack("g")
         when TrueClass, FalseClass, NilClass
           nil
-        when Symbol
-          padded(argument.to_s)
         else
           padded(argument.to_s)
         end
@@ -176,7 +181,6 @@ module Cyclotone
 
       def padded(string)
         bytes = "#{string}\0".b
-        padding = (4 - (bytes.bytesize % 4)) % 4
         pad_bytes(bytes)
       end
 

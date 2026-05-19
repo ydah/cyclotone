@@ -227,9 +227,7 @@ module Cyclotone
                  when :colon
                    advance
                    sample = parse_non_negative_integer("sample number")
-                   unless node.is_a?(AST::Atom)
-                     raise parse_error("sample suffix can only be applied to atoms")
-                   end
+                   raise parse_error("sample suffix can only be applied to atoms") unless node.is_a?(AST::Atom)
 
                    node.with_sample(sample)
                  when :lparen
@@ -279,9 +277,7 @@ module Cyclotone
         steps = parse_positive_integer("euclidean steps")
         rotation = 0
 
-        if accept(:comma)
-          rotation = parse_integer("euclidean rotation")
-        end
+        rotation = parse_integer("euclidean rotation") if accept(:comma)
 
         expect(:rparen)
         AST::Euclidean.new(pattern: node, pulses: pulses, steps: steps, rotation: rotation)
@@ -291,12 +287,12 @@ module Cyclotone
         expect(:lbrace)
         raise parse_error("empty polymetric branch") if current.type == :rbrace
 
-        patterns = [parse_sequence(terminators: [:comma, :rbrace])]
+        patterns = [parse_sequence(terminators: %i[comma rbrace])]
 
         while accept(:comma)
-          raise parse_error("empty polymetric branch") if current.type == :comma || current.type == :rbrace
+          raise parse_error("empty polymetric branch") if %i[comma rbrace].include?(current.type)
 
-          patterns << parse_sequence(terminators: [:comma, :rbrace])
+          patterns << parse_sequence(terminators: %i[comma rbrace])
         end
 
         expect(:rbrace)
@@ -412,22 +408,20 @@ module Cyclotone
         end
 
         if input[index] == "."
-          if input[index + 1]&.match?(/[0-9]/)
+          unless input[index + 1]&.match?(/[0-9]/)
+            raise ParseError.new("invalid number literal", line: line, column: column, source: @source)
+          end
+
+          index += 1
+          column += 1
+
+          while index < input.length && input[index].match?(/[0-9]/)
             index += 1
             column += 1
-
-            while index < input.length && input[index].match?(/[0-9]/)
-              index += 1
-              column += 1
-            end
-          else
-            raise ParseError.new("invalid number literal", line: line, column: column, source: @source)
           end
         end
 
-        if input[index] == "."
-          raise ParseError.new("invalid number literal", line: line, column: column, source: @source)
-        end
+        raise ParseError.new("invalid number literal", line: line, column: column, source: @source) if input[index] == "."
 
         if input[index] == "/" && input[index + 1]&.match?(/[0-9]/)
           index += 1

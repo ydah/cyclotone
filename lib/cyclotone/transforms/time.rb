@@ -83,7 +83,7 @@ module Cyclotone
           next event unless event.onset
 
           cycle_start = Rational(event.onset.floor)
-          step_index = (((event.onset - cycle_start) * div).floor).to_i
+          step_index = ((event.onset - cycle_start) * div).floor.to_i
           next event if step_index.even?
 
           shifted = Pattern.shift_event(event, step_shift)

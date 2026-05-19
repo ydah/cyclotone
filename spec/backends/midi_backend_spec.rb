@@ -61,7 +61,6 @@ RSpec.describe Cyclotone::Backends::MIDIBackend do
 
   it "lists and selects available MIDI outputs when UniMIDI is present" do
     first = Struct.new(:name).new("Device A")
-    second = Struct.new(:name).new("Device B")
     unimidi_output = Class.new do
       def self.all
         [Struct.new(:name).new("Device A"), Struct.new(:name).new("Device B")]

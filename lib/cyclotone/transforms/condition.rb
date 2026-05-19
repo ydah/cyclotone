@@ -67,7 +67,8 @@ module Cyclotone
       private
 
       def truthy?(value)
-        !(value.nil? || value == false || value == 0 || value == 0.0 || value == {})
+        falsey_number = value.is_a?(Numeric) && value.zero?
+        !(value.nil? || value == false || falsey_number || value == {})
       end
     end
   end

@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require "thread"
-
 module Cyclotone
   class Scheduler
     LOOKAHEAD = 0.3
@@ -20,7 +18,17 @@ module Cyclotone
 
     attr_reader :backend, :cps, :lookahead, :interval, :lookahead_cycles, :interval_cycles, :metrics
 
-    def initialize(cps: DEFAULT_CPS, backend:, lookahead: LOOKAHEAD, interval: INTERVAL, lookahead_cycles: nil, interval_cycles: nil, logger: nil, retry_failed: false, clock: nil)
+    def initialize(
+      backend:,
+      cps: DEFAULT_CPS,
+      lookahead: LOOKAHEAD,
+      interval: INTERVAL,
+      lookahead_cycles: nil,
+      interval_cycles: nil,
+      logger: nil,
+      retry_failed: false,
+      clock: nil
+    )
       @backend = backend
       @cps = normalize_cps(cps)
       @lookahead = lookahead

@@ -48,9 +48,7 @@ module Cyclotone
       emitted = 0
 
       while current_start < stop
-        if max_cycles && emitted >= max_cycles
-          raise ArgumentError, "span crosses more than #{max_cycles} cycles"
-        end
+        raise ArgumentError, "span crosses more than #{max_cycles} cycles" if max_cycles && emitted >= max_cycles
 
         cycle_boundary = [Rational(current_start.floor + 1), stop].min
         yield self.class.new(current_start, cycle_boundary)

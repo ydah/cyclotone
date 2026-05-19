@@ -51,8 +51,16 @@ module Cyclotone
     end
 
     def with_span(new_whole: UNSET, new_part: UNSET, whole: UNSET, part: UNSET)
-      next_whole = whole.equal?(UNSET) ? (new_whole.equal?(UNSET) ? self.whole : new_whole) : whole
-      next_part = part.equal?(UNSET) ? (new_part.equal?(UNSET) ? self.part : new_part) : part
+      next_whole = if whole.equal?(UNSET)
+                     new_whole.equal?(UNSET) ? self.whole : new_whole
+                   else
+                     whole
+                   end
+      next_part = if part.equal?(UNSET)
+                    new_part.equal?(UNSET) ? self.part : new_part
+                  else
+                    part
+                  end
 
       self.class.new(whole: next_whole, part: next_part, value: value)
     end

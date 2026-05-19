@@ -36,6 +36,7 @@ module Cyclotone
         attr_reader :value, :sample
 
         def initialize(value:, sample: nil)
+          super()
           @value = value
           @sample = sample
           freeze
@@ -60,6 +61,7 @@ module Cyclotone
         attr_reader :elements
 
         def initialize(elements:)
+          super()
           @elements = Node.deep_freeze(elements)
           freeze
         end
@@ -73,6 +75,7 @@ module Cyclotone
         attr_reader :patterns
 
         def initialize(patterns:)
+          super()
           @patterns = Node.deep_freeze(patterns)
           freeze
         end
@@ -86,6 +89,7 @@ module Cyclotone
         attr_reader :patterns
 
         def initialize(patterns:)
+          super()
           @patterns = Node.deep_freeze(patterns)
           freeze
         end
@@ -99,6 +103,7 @@ module Cyclotone
         attr_reader :pattern, :count
 
         def initialize(pattern:, count:)
+          super()
           @pattern = pattern
           @count = count.to_i
           freeze
@@ -113,6 +118,7 @@ module Cyclotone
         attr_reader :pattern, :count
 
         def initialize(pattern:, count:)
+          super()
           @pattern = pattern
           @count = count.to_i
           freeze
@@ -127,6 +133,7 @@ module Cyclotone
         attr_reader :pattern, :amount
 
         def initialize(pattern:, amount:)
+          super()
           @pattern = pattern
           @amount = amount
           freeze
@@ -141,6 +148,7 @@ module Cyclotone
         attr_reader :pattern, :amount
 
         def initialize(pattern:, amount:)
+          super()
           @pattern = pattern
           @amount = amount
           freeze
@@ -159,6 +167,7 @@ module Cyclotone
         attr_reader :pattern, :probability
 
         def initialize(pattern:, probability:)
+          super()
           @pattern = pattern
           @probability = probability
           freeze
@@ -173,6 +182,7 @@ module Cyclotone
         attr_reader :patterns
 
         def initialize(patterns:)
+          super()
           @patterns = Node.deep_freeze(patterns)
           freeze
         end
@@ -186,6 +196,7 @@ module Cyclotone
         attr_reader :pattern, :pulses, :steps, :rotation
 
         def initialize(pattern:, pulses:, steps:, rotation: 0)
+          super()
           @pattern = pattern
           @pulses = pulses.to_i
           @steps = steps.to_i
@@ -202,6 +213,7 @@ module Cyclotone
         attr_reader :patterns, :steps
 
         def initialize(patterns:, steps: nil)
+          super()
           @patterns = Node.deep_freeze(patterns)
           @steps = steps&.to_i
           freeze
