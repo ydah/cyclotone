@@ -20,6 +20,17 @@ RSpec.describe Cyclotone::Harmony do
     expect(values).to eq([67, 63, 60])
   end
 
+  it "preserves controls while arpeggiating hash note arrays" do
+    pattern = Cyclotone::Pattern.pure({ note: [60, 64], gain: 0.7, channel: 2 })
+
+    values = described_class.arpeggiate(pattern).query_cycle(0).map(&:value)
+
+    expect(values).to eq([
+      { note: 60, gain: 0.7, channel: 2 },
+      { note: 64, gain: 0.7, channel: 2 }
+    ])
+  end
+
   it "rejects unknown scales and invalid notes" do
     expect { described_class.scale(:missing, Cyclotone::Pattern.pure(0)) }.to raise_error(ArgumentError, /unknown scale/)
     expect { described_class.note_number("abc") }.to raise_error(ArgumentError, /invalid note/)

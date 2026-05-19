@@ -82,7 +82,7 @@ module Cyclotone
             event.part.start + (segment_length * (index + 1))
           )
 
-          Event.new(whole: part, part: part, value: note)
+          Event.new(whole: part, part: part, value: arpeggiated_value(event.value, note))
         end
       end
     end
@@ -144,6 +144,13 @@ module Cyclotone
       end
     end
     private_class_method :order_notes
+
+    def arpeggiated_value(value, note)
+      return value.merge(note: note) if value.is_a?(Hash) && value.key?(:note)
+
+      note
+    end
+    private_class_method :arpeggiated_value
 
     def invert_notes(notes, inversion)
       normalized = notes.dup
