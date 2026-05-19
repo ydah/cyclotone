@@ -4,43 +4,51 @@ module Cyclotone
   module Oscillators
     module_function
 
-    def sine
-      Pattern.continuous { |time| (Math.sin(phase(time)) + 1.0) / 2.0 }
+    def sine(freq: 1, phase: 0, bipolar: false)
+      oscillator(freq: freq, phase_offset: phase, bipolar: bipolar) do |time|
+        (Math.sin(phase(time)) + 1.0) / 2.0
+      end
     end
 
-    def cosine
-      Pattern.continuous { |time| (Math.cos(phase(time)) + 1.0) / 2.0 }
+    def cosine(freq: 1, phase: 0, bipolar: false)
+      oscillator(freq: freq, phase_offset: phase, bipolar: bipolar) do |time|
+        (Math.cos(phase(time)) + 1.0) / 2.0
+      end
     end
 
-    def tri
-      Pattern.continuous do |time|
+    def tri(freq: 1, phase: 0, bipolar: false)
+      oscillator(freq: freq, phase_offset: phase, bipolar: bipolar) do |time|
         position = cycle_position(time)
         position < 0.5 ? position * 2.0 : (1.0 - position) * 2.0
       end
     end
 
-    def saw
-      Pattern.continuous { |time| cycle_position(time) }
+    def saw(freq: 1, phase: 0, bipolar: false)
+      oscillator(freq: freq, phase_offset: phase, bipolar: bipolar) { |time| cycle_position(time) }
     end
 
-    def isaw
-      Pattern.continuous { |time| 1.0 - cycle_position(time) }
+    def isaw(freq: 1, phase: 0, bipolar: false)
+      oscillator(freq: freq, phase_offset: phase, bipolar: bipolar) { |time| 1.0 - cycle_position(time) }
     end
 
-    def square
-      Pattern.continuous { |time| cycle_position(time) < 0.5 ? 0.0 : 1.0 }
+    def square(freq: 1, phase: 0, bipolar: false)
+      oscillator(freq: freq, phase_offset: phase, bipolar: bipolar) { |time| cycle_position(time) < 0.5 ? 0.0 : 1.0 }
     end
 
-    def rand
+    def rand(steps: 128)
+      normalized_steps = positive_integer(steps, "rand steps")
+
       Pattern.continuous do |time|
         cycle = time.floor
-        step = ((cycle_position(time) * 128).floor).to_i
+        step = ((cycle_position(time) * normalized_steps).floor).to_i
         Support::Deterministic.float(:rand, cycle, step)
       end
     end
 
     def irand(maximum)
-      rand.fmap { |value| (value * maximum.to_i).floor }
+      normalized_maximum = positive_integer(maximum, "irand maximum")
+
+      rand.fmap { |value| (value * normalized_maximum).floor }
     end
 
     def perlin
@@ -56,9 +64,42 @@ module Cyclotone
       end
     end
 
-    def range(low, high, pattern)
+    def range(low, high, pattern, mode: :raw)
       Pattern.ensure_pattern(pattern).fmap do |value|
-        low.to_f + ((high.to_f - low.to_f) * value.to_f)
+        normalized_value = normalize_range_value(value.to_f, mode)
+        low.to_f + ((high.to_f - low.to_f) * normalized_value)
+      end
+    end
+
+    def bipolar(pattern)
+      Pattern.ensure_pattern(pattern).fmap { |value| (value.to_f * 2.0) - 1.0 }
+    end
+
+    def noise(steps: 128)
+      rand(steps: steps)
+    end
+
+    def sample_and_hold(pattern, steps: 8)
+      normalized_steps = positive_integer(steps, "sample_and_hold steps")
+      source = Pattern.ensure_pattern(pattern)
+
+      Pattern.continuous do |time|
+        sampled_time = Rational((time * normalized_steps).floor, normalized_steps)
+        source.query_point(sampled_time)
+      end
+    end
+
+    def brownian(step: 0.1)
+      normalized_step = step.to_f
+      raise ArgumentError, "brownian step must be positive" unless normalized_step.positive?
+
+      Pattern.continuous do |time|
+        cycle = time.floor
+        steps = (0..cycle).reduce(0.5) do |value, index|
+          delta = (Support::Deterministic.float(:brownian, index) * 2.0) - 1.0
+          (value + (delta * normalized_step)).clamp(0.0, 1.0)
+        end
+        steps
       end
     end
 
@@ -66,8 +107,14 @@ module Cyclotone
       source = Pattern.ensure_pattern(pattern)
       return source if source.continuous?
 
+      cache = {}
       Pattern.continuous do |time|
-        interpolate(source, Pattern.to_rational(time))
+        rational_time = Pattern.to_rational(time)
+        cache.fetch(rational_time) do
+          cache[rational_time] = interpolate(source, rational_time)
+          cache.shift if cache.length > 256
+          cache[rational_time]
+        end
       end
     end
 
@@ -80,6 +127,44 @@ module Cyclotone
       cycle_position(time) * Math::PI * 2.0
     end
     private_class_method :phase
+
+    def oscillator(freq:, phase_offset:, bipolar:)
+      normalized_freq = Pattern.to_rational(freq)
+      raise ArgumentError, "oscillator frequency must be positive" unless normalized_freq.positive?
+
+      offset = Pattern.to_rational(phase_offset)
+      Pattern.continuous do |time|
+        value = yield((time * normalized_freq) + offset)
+        bipolar ? (value * 2.0) - 1.0 : value
+      end
+    end
+    private_class_method :oscillator
+
+    def normalize_range_value(value, mode)
+      case mode.to_sym
+      when :raw
+        value
+      when :clamp
+        value.clamp(0.0, 1.0)
+      when :wrap
+        value % 1.0
+      when :fold
+        folded = value % 2.0
+        folded > 1.0 ? 2.0 - folded : folded
+      else
+        raise ArgumentError, "unknown range mode #{mode}"
+      end
+    end
+    private_class_method :normalize_range_value
+
+    def positive_integer(value, label)
+      normalized = Integer(value)
+      raise ArgumentError, "#{label} must be positive" unless normalized.positive?
+
+      normalized
+    rescue ArgumentError, TypeError => error
+      raise ArgumentError, "invalid #{label}: #{error.message}"
+    end
 
     def interpolate(source, time)
       anchors = anchors_for(source, time)

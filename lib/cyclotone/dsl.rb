@@ -8,9 +8,9 @@ module Cyclotone
       end
     end
 
-    %i[sine cosine tri saw isaw square rand irand perlin range smooth].each do |name|
-      define_method(name) do |*args|
-        Oscillators.public_send(name, *args)
+    %i[sine cosine tri saw isaw square rand irand perlin range bipolar noise sample_and_hold brownian smooth].each do |name|
+      define_method(name) do |*args, **kwargs|
+        Oscillators.public_send(name, *args, **kwargs)
       end
     end
 
@@ -126,8 +126,8 @@ module Cyclotone
       stream.stop
     end
 
-    def chord(name, root: 0)
-      Harmony.chord(name, root: root)
+    def chord(name, root: 0, **options)
+      Harmony.chord(name, root: root, **options)
     end
 
     def scale(name, pattern, root: 0)

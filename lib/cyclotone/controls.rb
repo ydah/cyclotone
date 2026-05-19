@@ -6,11 +6,11 @@ module Cyclotone
       s: { type: :string, aliases: [:sound] },
       n: { type: :integer },
       speed: { type: :float, default: 1.0 },
-      begin: { type: :float, aliases: [:sample_begin] },
-      end: { type: :float, aliases: [:sample_end] },
-      pan: { type: :float, default: 0.5 },
-      gain: { type: :float, default: 1.0 },
-      amp: { type: :float, default: 1.0 },
+      begin: { type: :float, aliases: [:sample_begin], range: 0..1 },
+      end: { type: :float, aliases: [:sample_end], range: 0..1 },
+      pan: { type: :float, default: 0.5, range: 0..1 },
+      gain: { type: :float, default: 1.0, minimum: 0 },
+      amp: { type: :float, default: 1.0, minimum: 0 },
       cut: { type: :integer },
       unit: { type: :string },
       accelerate: { type: :float },
@@ -55,10 +55,10 @@ module Cyclotone
       ring: { type: :float },
       ringf: { type: :float },
       ringdf: { type: :float },
-      note: { type: :integer },
-      velocity: { type: :integer, default: 100 },
+      note: { type: :integer_or_array },
+      velocity: { type: :integer, default: 100, range: 0..127 },
       sustain: { type: :float, default: 1.0 },
-      channel: { type: :integer, default: 0 },
+      channel: { type: :integer, default: 0, range: 0..15 },
       cc: { type: :hash }
     }.freeze
 
@@ -104,19 +104,76 @@ module Cyclotone
     def wrap_value(control_name, value)
       if value.is_a?(Hash)
         if control_name == :s && (value.key?(:s) || value.key?(:n))
-          value.merge(s: value[:s] || value[:value])
+          sample = value.key?(:s) ? value[:s] : value[:value]
+          value.merge(s: validate_value(control_name, sample))
         elsif control_name == :note && value.key?(:note)
-          value
+          value.merge(note: validate_value(control_name, value[:note]))
         else
-          value.merge(control_name => value[control_name] || value[:value] || value)
+          raw_value = if value.key?(control_name)
+                        value[control_name]
+                      elsif value.key?(:value)
+                        value[:value]
+                      else
+                        value
+                      end
+          value.merge(control_name => validate_value(control_name, raw_value))
         end
       else
-        { control_name => value }
+        { control_name => validate_value(control_name, value) }
       end
     end
 
     def canonical(name)
       ALIASES.fetch(name.to_sym) { raise InvalidControlError, "unknown control #{name}" }
+    end
+
+    def validate_value(control_name, value)
+      definition = CONTROL_DEFS.fetch(control_name)
+      validate_type(control_name, value, definition.fetch(:type))
+      validate_range(control_name, value, definition)
+      value
+    end
+
+    def validate_type(control_name, value, type)
+      case type
+      when :integer
+        raise InvalidControlError, "#{control_name} must be numeric" unless value.is_a?(Numeric)
+      when :integer_or_array
+        values = value.is_a?(Array) ? value : [value]
+        raise InvalidControlError, "#{control_name} must be numeric" unless values.all? { |entry| entry.is_a?(Numeric) }
+      when :float
+        raise InvalidControlError, "#{control_name} must be numeric" unless value.is_a?(Numeric)
+      when :hash
+        validate_cc(value) if control_name == :cc
+      end
+    end
+
+    def validate_range(control_name, value, definition)
+      values = value.is_a?(Array) ? value : [value]
+
+      if definition[:range]
+        range = definition[:range]
+        raise InvalidControlError, "#{control_name} must be within #{range}" unless values.all? { |entry| range.cover?(entry) }
+      end
+
+      return unless definition.key?(:minimum)
+
+      minimum = definition.fetch(:minimum)
+      raise InvalidControlError, "#{control_name} must be >= #{minimum}" unless values.all? { |entry| entry >= minimum }
+    end
+
+    def validate_cc(value)
+      raise InvalidControlError, "cc must be a Hash" unless value.is_a?(Hash)
+
+      value.each do |controller, amount|
+        unless controller.is_a?(Numeric) && controller.between?(0, 127)
+          raise InvalidControlError, "cc controllers must be within 0..127"
+        end
+
+        unless amount.is_a?(Numeric) && amount.between?(0, 127)
+          raise InvalidControlError, "cc values must be within 0..127"
+        end
+      end
     end
   end
 end

@@ -46,7 +46,7 @@ module Cyclotone
     module_function
 
     def scale(name, pattern, root: 0)
-      intervals = SCALES.fetch(name.to_sym)
+      intervals = SCALES.fetch(name.to_sym) { raise ArgumentError, "unknown scale #{name}" }
       root_note = note_number(root)
 
       Pattern.ensure_pattern(pattern).fmap do |value|
@@ -54,11 +54,15 @@ module Cyclotone
       end
     end
 
-    def chord(name, root: 0)
+    def chord(name, root: 0, inversion: 0, voicing: nil, drop2: false, octave_spread: 0)
       root_note = note_number(root)
-      notes = CHORDS.fetch(name.to_sym) { raise ArgumentError, "unknown chord #{name}" }.map do |interval|
+      intervals = voicing || CHORDS.fetch(name.to_sym) { raise ArgumentError, "unknown chord #{name}" }
+      notes = Array(intervals).map do |interval|
         root_note + interval
       end
+      notes = invert_notes(notes, inversion.to_i)
+      notes = spread_octaves(notes, octave_spread.to_i)
+      notes = drop_second_voice(notes) if drop2
 
       Pattern.pure(notes)
     end
@@ -67,6 +71,7 @@ module Cyclotone
       Pattern.ensure_pattern(pattern).flat_map_events do |event|
         notes = extract_notes(event.value)
         next [event] if notes.empty?
+        next [] if event.part.duration.zero?
 
         ordered = order_notes(notes, mode)
         segment_length = event.part.duration / ordered.length
@@ -87,19 +92,27 @@ module Cyclotone
 
       normalized = value.to_s.strip.downcase
       match = normalized.match(/\A([a-g](?:s|b)?)(-?\d+)\z/)
-      return normalized.to_i if match.nil?
+      return normalized.to_i if match.nil? && normalized.match?(/\A-?\d+\z/)
+      raise ArgumentError, "invalid note #{value.inspect}" if match.nil?
 
       NOTE_OFFSETS.fetch(match[1]) + ((match[2].to_i + 1) * 12)
     end
 
     def apply_scale(intervals, root_note, value)
       if value.is_a?(Hash) && value.key?(:note)
-        value.merge(note: map_degree(intervals, root_note, value[:note]))
+        value.merge(note: map_value(intervals, root_note, value[:note]))
       else
-        map_degree(intervals, root_note, value)
+        map_value(intervals, root_note, value)
       end
     end
     private_class_method :apply_scale
+
+    def map_value(intervals, root_note, value)
+      return value.map { |entry| map_degree(intervals, root_note, entry) } if value.is_a?(Array)
+
+      map_degree(intervals, root_note, value)
+    end
+    private_class_method :map_value
 
     def map_degree(intervals, root_note, value)
       degree = note_number(value)
@@ -131,6 +144,37 @@ module Cyclotone
       end
     end
     private_class_method :order_notes
+
+    def invert_notes(notes, inversion)
+      normalized = notes.dup
+
+      inversion.times do
+        normalized << (normalized.shift + 12)
+      end
+
+      (-inversion).times do
+        normalized.unshift(normalized.pop - 12)
+      end
+
+      normalized
+    end
+    private_class_method :invert_notes
+
+    def spread_octaves(notes, spread)
+      return notes if spread <= 0
+
+      notes.each_with_index.map { |note, index| note + (12 * spread * index) }
+    end
+    private_class_method :spread_octaves
+
+    def drop_second_voice(notes)
+      return notes if notes.length < 2
+
+      dropped = notes.dup
+      dropped[-2] -= 12
+      dropped.sort
+    end
+    private_class_method :drop_second_voice
   end
 end
 
@@ -139,7 +183,10 @@ module Cyclotone
     def up(semitones)
       fmap do |value|
         if value.is_a?(Hash) && value.key?(:note)
-          value.merge(note: value[:note] + semitones.to_i)
+          notes = value[:note].is_a?(Array) ? value[:note].map { |note| note + semitones.to_i } : value[:note] + semitones.to_i
+          value.merge(note: notes)
+        elsif value.is_a?(Array)
+          value.map { |note| note + semitones.to_i }
         else
           value + semitones.to_i
         end

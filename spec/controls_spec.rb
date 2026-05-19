@@ -19,4 +19,17 @@ RSpec.describe Cyclotone::Controls do
   it "raises for unknown control names" do
     expect { described_class.control(:unknown, "bd") }.to raise_error(Cyclotone::InvalidControlError)
   end
+
+  it "preserves falsey values when wrapping hashes" do
+    value = described_class.gain({ value: 0 }).query_cycle(0).first.value
+
+    expect(value[:gain]).to eq(0)
+  end
+
+  it "validates ranged control values" do
+    expect { described_class.pan(1.5).query_cycle(0) }.to raise_error(Cyclotone::InvalidControlError, /pan/)
+    expect { described_class.gain(-0.1).query_cycle(0) }.to raise_error(Cyclotone::InvalidControlError, /gain/)
+    expect { described_class.channel(16).query_cycle(0) }.to raise_error(Cyclotone::InvalidControlError, /channel/)
+    expect { described_class.cc({ 128 => 1 }).query_cycle(0) }.to raise_error(Cyclotone::InvalidControlError, /controllers/)
+  end
 end

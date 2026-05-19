@@ -37,4 +37,10 @@ RSpec.describe Cyclotone::DSL do
     expect(stream).to have_received(:qtrigger)
     expect(stream).to have_received(:mtrigger).with(4)
   end
+
+  it "passes keyword arguments to oscillator helpers" do
+    value = context.sine(freq: 2, phase: Rational(1, 4), bipolar: true).query_point(0)
+
+    expect(value).to be_within(0.001).of(1.0)
+  end
 end
