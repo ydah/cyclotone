@@ -63,4 +63,19 @@ RSpec.describe Cyclotone::Backends::MIDIFileBackend do
 
     expect(File.exist?(output_path)).to be(true)
   end
+
+  it "can split rendered events into slot tracks" do
+    backend = described_class.new(path: output_path, bpm: 120, track_mode: :slot)
+    scheduler = Cyclotone::Scheduler.new(cps: 1, backend: backend)
+    scheduler.update_pattern(:d1, Cyclotone::Controls.note(60))
+    scheduler.update_pattern(:d2, Cyclotone::Controls.note(64))
+
+    scheduler.render(duration: 0.25)
+    data = backend.midi_file_data
+
+    expect(data[8, 2].unpack1("n")).to eq(1)
+    expect(data[10, 2].unpack1("n")).to eq(2)
+    expect(data).to include("Cyclotone:d1")
+    expect(data).to include("Cyclotone:d2")
+  end
 end

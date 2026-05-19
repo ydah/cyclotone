@@ -104,6 +104,46 @@ RSpec.describe Cyclotone::Backends::OSCBackend do
     expect(backend.send(:osc_type_tag, :lead)).to eq("S")
   end
 
+  it "encodes double and blob OSC values" do
+    backend = described_class.new(socket: socket)
+
+    expect(backend.send(:osc_type_tag, described_class.double(1.5))).to eq("d")
+    expect(backend.send(:osc_type_tag, described_class.blob("abc"))).to eq("b")
+    expect(backend.send(:encode_argument, described_class.double(1.5)).bytesize).to eq(8)
+    expect(backend.send(:encode_argument, described_class.blob("abc"))).to start_with([3].pack("N"))
+  end
+
+  it "builds OSC bundles with timetags" do
+    backend = described_class.new(socket: socket)
+    event = Cyclotone::Event.new(
+      whole: Cyclotone::TimeSpan.new(0, 1),
+      part: Cyclotone::TimeSpan.new(0, 1),
+      value: { s: "bd" }
+    )
+
+    bundle = backend.build_bundle([event], at: 1.0, timetag: :immediate)
+
+    expect(bundle).to start_with("#bundle")
+    expect(bundle).to include("/dirt/play")
+  end
+
+  it "preserves the original exception as ConnectionError cause" do
+    backend = described_class.new(socket: Class.new do
+      def send(*)
+        raise IOError, "closed"
+      end
+    end.new, retries: 0)
+    event = Cyclotone::Event.new(
+      whole: Cyclotone::TimeSpan.new(0, 1),
+      part: Cyclotone::TimeSpan.new(0, 1),
+      value: { s: "bd" }
+    )
+
+    expect { backend.send_event(event, at: 1.0) }.to raise_error(Cyclotone::ConnectionError) do |error|
+      expect(error.cause).to be_a(IOError)
+    end
+  end
+
   it "closes sockets that support close" do
     closable = Class.new do
       attr_reader :closed

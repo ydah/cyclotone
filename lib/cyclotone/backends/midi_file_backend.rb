@@ -11,19 +11,20 @@ module Cyclotone
       DEFAULT_PPQN = 480
       DEFAULT_TRACK_NAME = "Cyclotone"
 
-      attr_reader :path, :channel, :ppqn, :bpm
+      attr_reader :path, :channel, :ppqn, :bpm, :track_mode
 
       def self.bpm_from_cps(cps, beats_per_cycle: 4)
         cps.to_f * 60.0 * beats_per_cycle.to_f
       end
 
-      def initialize(path:, bpm: DEFAULT_BPM, ppqn: DEFAULT_PPQN, channel: 0, track_name: DEFAULT_TRACK_NAME, time_signature: [4, 4])
+      def initialize(path:, bpm: DEFAULT_BPM, ppqn: DEFAULT_PPQN, channel: 0, track_name: DEFAULT_TRACK_NAME, time_signature: [4, 4], track_mode: :single)
         @path = path
         @bpm = bpm.to_f
         @ppqn = ppqn.to_i
         @channel = channel.to_i
         @track_name = track_name.to_s
         @time_signature = time_signature
+        @track_mode = track_mode.to_sym
         @messages = []
         @origin_time = nil
       end
@@ -43,12 +44,12 @@ module Cyclotone
         self
       end
 
-      def send_event(event, at: Time.now.to_f, cps: nil, **_options)
+      def send_event(event, at: Time.now.to_f, cps: nil, slot_id: nil, **_options)
         capture_time = at.to_f
         @origin_time ||= capture_time
 
         messages_for(event, cps: cps).each do |message|
-          @messages << normalize_message(message, capture_time)
+          @messages << normalize_message(message, capture_time, slot_id)
         end
 
         self
@@ -77,29 +78,42 @@ module Cyclotone
       end
 
       def midi_file_data
-        header_chunk + track_chunk(track_data)
+        tracks = track_payloads
+        header_chunk(tracks.length) + tracks.map { |data| track_chunk(data) }.join
       end
 
       private
 
-      def normalize_message(message, capture_time)
+      def normalize_message(message, capture_time, slot_id)
         timestamp = capture_time + message.fetch(:delay, 0).to_f
-        message.reject { |key, _| key == :delay }.merge(at: timestamp)
+        message.reject { |key, _| key == :delay }.merge(at: timestamp, track: track_key(slot_id))
       end
 
-      def header_chunk
-        "MThd".b << [6, 0, 1, ppqn].pack("Nnnn")
+      def header_chunk(track_count)
+        format = track_count > 1 ? 1 : 0
+        "MThd".b << [6, format, track_count, ppqn].pack("Nnnn")
       end
 
       def track_chunk(data)
         "MTrk".b << [data.bytesize].pack("N") << data
       end
 
-      def track_data
+      def track_payloads
+        return [track_data(@messages, @track_name)] unless track_mode == :slot
+
+        grouped = @messages.group_by { |message| message[:track] }
+        return [track_data([], @track_name)] if grouped.empty?
+
+        grouped.sort_by { |track, _| track.to_s }.map do |track, messages|
+          track_data(messages, "#{@track_name}:#{track}")
+        end
+      end
+
+      def track_data(messages, track_name)
         previous_tick = 0
         body = +"".b
 
-        track_events.each do |track_event|
+        track_events(messages, track_name).each do |track_event|
           delta = track_event[:tick] - previous_tick
           body << encode_variable_length(delta)
           body << track_event[:data]
@@ -109,14 +123,14 @@ module Cyclotone
         body
       end
 
-      def track_events
+      def track_events(messages, track_name)
         events = [
           { tick: 0, priority: 0, data: tempo_event },
           { tick: 0, priority: 1, data: time_signature_event },
-          { tick: 0, priority: 2, data: track_name_event }
+          { tick: 0, priority: 2, data: track_name_event(track_name) }
         ]
 
-        events.concat(@messages.map { |message| channel_track_event(message) })
+        events.concat(messages.map { |message| channel_track_event(message) })
 
         end_tick = events.map { |event| event[:tick] }.max || 0
         events << { tick: end_tick, priority: 99, data: end_of_track_event }
@@ -174,9 +188,15 @@ module Cyclotone
         ].pack("C3")
       end
 
-      def track_name_event
-        name = @track_name.dup.force_encoding(Encoding::ASCII_8BIT)
+      def track_name_event(name_value)
+        name = name_value.to_s.dup.force_encoding(Encoding::ASCII_8BIT)
         "\xFF\x03".b << encode_variable_length(name.bytesize) << name
+      end
+
+      def track_key(slot_id)
+        return :default unless track_mode == :slot
+
+        slot_id || :default
       end
 
       def time_signature_event

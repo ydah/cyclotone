@@ -219,7 +219,7 @@ module Cyclotone
           absolute_time = state[:start_wall_time] + ((event.onset.to_f - state[:start_cycle]) / state[:cps])
 
           begin
-            state[:backend].send_event(event, at: absolute_time, cps: state[:cps])
+            state[:backend].send_event(event, at: absolute_time, cps: state[:cps], slot_id: slot_id)
             mark_sent(key, logical_end)
           rescue StandardError => error
             failed = true

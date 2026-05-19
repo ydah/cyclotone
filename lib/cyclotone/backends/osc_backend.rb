@@ -5,7 +5,20 @@ require "socket"
 module Cyclotone
   module Backends
     class OSCBackend
+      Double = Struct.new(:value, keyword_init: true)
+      Blob = Struct.new(:bytes, keyword_init: true)
+
       attr_reader :host, :port, :address
+
+      class << self
+        def double(value)
+          Double.new(value: value.to_f)
+        end
+
+        def blob(bytes)
+          Blob.new(bytes: bytes.to_s.b)
+        end
+      end
 
       def initialize(host: "127.0.0.1", port: 57_120, address: "/dirt/play", socket: nil, socket_factory: nil, retries: 1)
         @host = host
@@ -32,7 +45,12 @@ module Cyclotone
         encode_message(address, payload_for(event, at: at, cps: cps))
       end
 
-      def send_event(event, at: Time.now.to_f, cps: nil)
+      def build_bundle(events, at:, cps: nil, timetag: at)
+        messages = Array(events).map { |event| build_message(event, at: at, cps: cps) }
+        encode_bundle(messages, timetag: timetag)
+      end
+
+      def send_event(event, at: Time.now.to_f, cps: nil, **_options)
         with_retry do
           @socket.send(build_message(event, at: at, cps: cps), 0, host, port)
         end
@@ -106,6 +124,8 @@ module Cyclotone
 
       def osc_type_tag(argument)
         case argument
+        when Double then "d"
+        when Blob then "b"
         when Integer then "i"
         when Float then "f"
         when TrueClass then "T"
@@ -118,6 +138,10 @@ module Cyclotone
 
       def encode_argument(argument)
         case argument
+        when Double
+          [argument.value].pack("G")
+        when Blob
+          encode_blob(argument.bytes)
         when Integer
           [argument].pack("N")
         when Float
@@ -131,8 +155,32 @@ module Cyclotone
         end
       end
 
+      def encode_blob(bytes)
+        data = bytes.to_s.b
+        [data.bytesize].pack("N") + pad_bytes(data)
+      end
+
+      def encode_bundle(messages, timetag:)
+        body = messages.map { |message| [message.bytesize].pack("N") + message }.join
+        padded("#bundle") + encode_timetag(timetag) + body
+      end
+
+      def encode_timetag(value)
+        return [0, 1].pack("NN") if value.nil? || value == :immediate
+
+        seconds = value.to_f + 2_208_988_800
+        whole = seconds.floor
+        fraction = ((seconds - whole) * (2**32)).round
+        [whole, fraction].pack("NN")
+      end
+
       def padded(string)
         bytes = "#{string}\0".b
+        padding = (4 - (bytes.bytesize % 4)) % 4
+        pad_bytes(bytes)
+      end
+
+      def pad_bytes(bytes)
         padding = (4 - (bytes.bytesize % 4)) % 4
         bytes + ("\0".b * padding)
       end
