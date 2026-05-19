@@ -28,4 +28,5 @@ module Cyclotone
 
   class ConnectionError < Error; end
   class InvalidControlError < Error; end
+  class InvalidRationalError < Error; end
 end

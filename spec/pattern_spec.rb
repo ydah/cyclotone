@@ -77,6 +77,12 @@ RSpec.describe Cyclotone::Pattern do
     end
   end
 
+  describe ".to_rational" do
+    it "wraps invalid rational input in a Cyclotone error" do
+      expect { described_class.to_rational("abc") }.to raise_error(Cyclotone::InvalidRationalError, /invalid rational/)
+    end
+  end
+
   describe ".fastcat" do
     it "concatenates patterns evenly inside a cycle" do
       pattern = described_class.fastcat([

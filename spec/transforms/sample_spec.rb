@@ -10,6 +10,7 @@ RSpec.describe "sample transforms" do
       { s: "bd", begin: 0.0, end: 0.5 },
       { s: "bd", begin: 0.5, end: 1.0 }
     ])
+    expect(values.flat_map { |value| [value[:begin], value[:end]] }).to all(be_a(Rational))
   end
 
   it "adds slice speed compensation with splice" do

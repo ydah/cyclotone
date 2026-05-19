@@ -261,7 +261,7 @@ module Cyclotone
 
         Rational(value.to_s)
       rescue ArgumentError, TypeError => error
-        raise ArgumentError, "invalid rational value #{value.inspect}: #{error.message}"
+        raise InvalidRationalError, "invalid rational value #{value.inspect}: #{error.message}"
       end
 
       def timecat(weighted_patterns)

@@ -1,4 +1,10 @@
 module Cyclotone
+  class Error < StandardError
+  end
+
+  class InvalidRationalError < Error
+  end
+
   class TimeSpan
     attr_reader start: Rational
     attr_reader stop: Rational
