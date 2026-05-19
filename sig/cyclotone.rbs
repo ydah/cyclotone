@@ -61,4 +61,37 @@ module Cyclotone
     def self.stack: (Array[untyped] patterns, ?empty: Symbol) -> Pattern
     def self.ensure_pattern: (untyped value, ?strings: Symbol) -> Pattern
   end
+
+  module Backends
+    class MIDIFileBackend
+      attr_reader path: String
+      attr_reader channel: Integer
+      attr_reader ppqn: Integer
+      attr_reader bpm: Float
+      attr_reader track_mode: Symbol
+
+      def self.bpm_from_cps: (untyped cps, ?beats_per_cycle: untyped) -> Float
+
+      def initialize: (
+        path: String,
+        ?bpm: untyped,
+        ?ppqn: untyped,
+        ?channel: untyped,
+        ?track_name: untyped,
+        ?time_signature: untyped,
+        ?track_mode: untyped
+      ) -> void
+      def begin_capture: (at: untyped) -> self
+      def end_capture: () -> self
+      def clear: () -> self
+      def tempo_change: (at: untyped, bpm: untyped) -> self
+      def time_signature_change: (at: untyped, numerator: untyped, denominator: untyped) -> self
+      def send_event: (Event event, ?at: untyped, ?cps: untyped, ?slot_id: untyped, **untyped) -> self
+      def write!: () -> String
+      def flush: () -> self
+      def close: () -> self
+      def panic: () -> self
+      def midi_file_data: () -> String
+    end
+  end
 end
