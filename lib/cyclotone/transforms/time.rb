@@ -86,7 +86,13 @@ module Cyclotone
           step_index = (((event.onset - cycle_start) * div).floor).to_i
           next event if step_index.even?
 
-          Pattern.shift_event(event, step_shift)
+          shifted = Pattern.shift_event(event, step_shift)
+          cycle_span = TimeSpan.new(cycle_start, cycle_start + 1)
+          clipped_part = shifted.part.intersection(cycle_span)
+          next nil unless clipped_part
+
+          clipped_whole = shifted.whole&.intersection(cycle_span) || shifted.whole
+          shifted.with_span(part: clipped_part, whole: clipped_whole)
         end
       end
 

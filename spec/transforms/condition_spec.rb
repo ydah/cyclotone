@@ -32,6 +32,18 @@ RSpec.describe "condition transforms" do
     expect(values).to eq(["bd"])
   end
 
+  it "supports continuous boolean masks" do
+    mask = Cyclotone::Pattern.continuous { |time| time < Rational(1, 2) }
+
+    expect(base.mask(mask).query_cycle(0).map(&:value)).to eq(["bd"])
+  end
+
+  it "keeps source events when fix target is silent" do
+    fixed = base.fix(Cyclotone::Pattern.pure(true)) { Cyclotone::Pattern.silence }
+
+    expect(fixed.query_cycle(0).map(&:value)).to eq(%w[bd sd])
+  end
+
   it "treats zero as false in struct gates" do
     structured = Cyclotone::Pattern.pure("bd").struct(Cyclotone::Pattern.mn("1 0 1 0"))
 

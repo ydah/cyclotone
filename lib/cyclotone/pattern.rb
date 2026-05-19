@@ -28,7 +28,7 @@ module Cyclotone
 
     def query_span(span)
       span = self.class.coerce_span(span)
-      cycle_spans = span.cycle_spans
+      cycle_spans = span.each_cycle_span.to_a
       cycle_spans = [span] if cycle_spans.empty? && continuous?
 
       cycle_spans.flat_map { |cycle_span| query.call(cycle_span) }.then do |events|
@@ -108,9 +108,14 @@ module Cyclotone
       Pattern.new do |span|
         left_events = query_span(span)
         right_events = other_pattern.query_span(span)
+        right_events_by_start = right_events.sort_by { |event| event.active_span.start }
 
         left_events.flat_map do |left_event|
-          right_events.filter_map do |right_event|
+          left_stop = left_event.active_span.stop
+
+          right_events_by_start.filter_map do |right_event|
+            break [] if right_event.active_span.start >= left_stop
+
             overlap = left_event.active_span.intersection(right_event.active_span)
             next unless overlap
 
@@ -150,14 +155,24 @@ module Cyclotone
     end
 
     def merge(other)
+      merge_right(other)
+    end
+
+    def merge_left(other)
       combine_left(other) do |left, right|
-        if left.is_a?(Hash) && right.is_a?(Hash)
-          left.merge(right)
-        elsif right.nil?
-          left
-        else
-          right
-        end
+        merge_values(right, left)
+      end
+    end
+
+    def merge_right(other)
+      combine_left(other) do |left, right|
+        merge_values(left, right)
+      end
+    end
+
+    def merge_deep(other)
+      combine_left(other) do |left, right|
+        deep_merge_values(left, right)
       end
     end
 
@@ -454,7 +469,9 @@ module Cyclotone
         keys = left.keys | right.keys
         keys.each_with_object({}) do |key, result|
           result[key] =
-            if left.key?(key) && right.key?(key) && left[key].respond_to?(operator)
+            if left.key?(key) && right.key?(key) && right[key].nil?
+              left[key]
+            elsif left.key?(key) && right.key?(key) && left[key].respond_to?(operator)
               left[key].public_send(operator, right[key])
             else
               right.fetch(key, left[key])
@@ -466,6 +483,31 @@ module Cyclotone
         left.public_send(operator, right)
       else
         left
+      end
+    end
+
+    def merge_values(left, right)
+      if left.is_a?(Hash) && right.is_a?(Hash)
+        left.merge(right.reject { |_key, value| value.nil? })
+      elsif right.nil?
+        left
+      else
+        right
+      end
+    end
+
+    def deep_merge_values(left, right)
+      return left if right.nil?
+      return right unless left.is_a?(Hash) && right.is_a?(Hash)
+
+      right.each_with_object(left.dup) do |(key, value), merged|
+        next if value.nil?
+
+        merged[key] = if merged[key].is_a?(Hash) && value.is_a?(Hash)
+                        deep_merge_values(merged[key], value)
+                      else
+                        value
+                      end
       end
     end
   end

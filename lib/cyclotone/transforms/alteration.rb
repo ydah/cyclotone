@@ -33,12 +33,12 @@ module Cyclotone
         sometimes_by(0.5, &block)
       end
 
-      def sometimes_by(probability, &block)
+      def sometimes_by(probability, namespace: :sometimes, &block)
         normalized_probability = validate_probability(probability, "sometimes probability")
         raise ArgumentError, "sometimes_by requires a block" unless block
 
         Pattern.new do |span|
-          if Support::Deterministic.float(:sometimes, normalized_probability, span.cycle_number) < normalized_probability
+          if Support::Deterministic.float(namespace, normalized_probability, span.cycle_number) < normalized_probability
             block.call(self).query_span(span)
           else
             query_span(span)

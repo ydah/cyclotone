@@ -40,19 +40,29 @@ module Cyclotone
       start <= normalized_time && normalized_time < stop
     end
 
-    def cycle_spans
-      return [] if duration.zero?
+    def each_cycle_span(max_cycles: nil)
+      return enum_for(:each_cycle_span, max_cycles: max_cycles) unless block_given?
+      return self if duration.zero?
 
-      spans = []
       current_start = start
+      emitted = 0
 
       while current_start < stop
+        if max_cycles && emitted >= max_cycles
+          raise ArgumentError, "span crosses more than #{max_cycles} cycles"
+        end
+
         cycle_boundary = [Rational(current_start.floor + 1), stop].min
-        spans << self.class.new(current_start, cycle_boundary)
+        yield self.class.new(current_start, cycle_boundary)
         current_start = cycle_boundary
+        emitted += 1
       end
 
-      spans
+      self
+    end
+
+    def cycle_spans(max_cycles: nil)
+      each_cycle_span(max_cycles: max_cycles).to_a
     end
 
     def shift(amount)
@@ -96,6 +106,7 @@ module Cyclotone
 
     def coerce_time(value)
       return value if value.is_a?(Rational)
+      return Rational(value.to_s) if value.is_a?(Float)
 
       Rational(value)
     rescue ArgumentError, TypeError => error

@@ -98,9 +98,60 @@ RSpec.describe Cyclotone::Pattern do
     end
   end
 
+  describe ".cat" do
+    it "rotates one pattern per cycle" do
+      pattern = described_class.cat(%w[bd sd])
+
+      expect(pattern.query_cycle(0).map(&:value)).to eq(["bd"])
+      expect(pattern.query_cycle(1).map(&:value)).to eq(["sd"])
+      expect(pattern.query_cycle(2).map(&:value)).to eq(["bd"])
+    end
+  end
+
   describe ".randcat" do
     it "rejects empty pattern lists" do
       expect { described_class.randcat([]).query_cycle(0) }.to raise_error(ArgumentError, /randcat/)
+    end
+
+    it "uses namespace to de-correlate random choices" do
+      left = described_class.randcat(%w[bd sd], namespace: :left).query_cycle(1).map(&:value)
+      left_again = described_class.randcat(%w[bd sd], namespace: :left).query_cycle(1).map(&:value)
+      right = described_class.randcat(%w[bd sd], namespace: :right).query_cycle(1).map(&:value)
+
+      expect(left_again).to eq(left)
+      expect([left, right].flatten).to all(satisfy { |value| %w[bd sd].include?(value) })
+    end
+  end
+
+  describe "#merge" do
+    it "ignores nil right-side hash values" do
+      pattern = described_class.pure({ gain: 0.8, pan: 0.2 }).merge(described_class.pure({ gain: nil, speed: 2 }))
+
+      expect(pattern.query_cycle(0).first.value).to eq({ gain: 0.8, pan: 0.2, speed: 2 })
+    end
+
+    it "can prefer left-side values" do
+      pattern = described_class.pure({ gain: 0.8 }).merge_left(described_class.pure({ gain: 0.2, pan: 1 }))
+
+      expect(pattern.query_cycle(0).first.value).to eq({ gain: 0.8, pan: 1 })
+    end
+
+    it "can merge nested hash values" do
+      pattern = described_class.pure({ fx: { room: 0.1, size: 0.3 } }).merge_deep(
+        described_class.pure({ fx: { room: nil, dry: 0.8 } })
+      )
+
+      expect(pattern.query_cycle(0).first.value).to eq({ fx: { room: 0.1, size: 0.3, dry: 0.8 } })
+    end
+  end
+
+  describe "#combine_left" do
+    it "samples continuous patterns on the left event onset" do
+      control = described_class.continuous(sample: :begin) { |time| time }
+      pattern = described_class.fastcat([described_class.pure("bd"), described_class.pure("sd")])
+        .combine_left(control) { |value, control_value| [value, control_value] }
+
+      expect(pattern.query_cycle(0).map(&:value)).to eq([["bd", Rational(0)], ["sd", Rational(1, 2)]])
     end
   end
 

@@ -32,4 +32,11 @@ RSpec.describe "alteration transforms" do
     expect { base.trunc(Rational(3, 2)) }.to raise_error(ArgumentError, /trunc/)
     expect { base.spread(->(pattern, _factor) { pattern }, []) }.to raise_error(ArgumentError, /values/)
   end
+
+  it "allows deterministic namespaces for sometimes_by" do
+    left = base.sometimes_by(0.5, namespace: :left) { |pattern| pattern.rev }.query_cycle(2).map(&:value)
+    right = base.sometimes_by(0.5, namespace: :right) { |pattern| pattern.rev }.query_cycle(2).map(&:value)
+
+    expect([left, right]).to all(be_a(Array))
+  end
 end

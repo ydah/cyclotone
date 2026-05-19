@@ -16,6 +16,13 @@ RSpec.describe "time and alteration transforms" do
     expect(pattern.rev.query_cycle(0).map(&:value)).to eq(%w[sd bd])
   end
 
+  it "returns to the source ordering across a palindrome pair" do
+    transformed = pattern.palindrome
+
+    expect(transformed.query_cycle(0).map(&:value)).to eq(%w[sd bd])
+    expect(transformed.query_cycle(1).map(&:value)).to eq(%w[bd sd])
+  end
+
   it "applies every on matching cycles only" do
     transformed = pattern.every(2) { |value| value.rev }
 
@@ -46,5 +53,11 @@ RSpec.describe "time and alteration transforms" do
 
   it "rejects invalid swing divisions" do
     expect { pattern.swing(0.1, 0) }.to raise_error(ArgumentError, /division/)
+  end
+
+  it "clips swung events to the current cycle" do
+    swung = Cyclotone::Pattern.mn("bd bd").swing(1, 2)
+
+    expect(swung.query_cycle(0).all? { |event| event.part.start >= 0 && event.part.stop <= 1 }).to be(true)
   end
 end

@@ -60,6 +60,13 @@ RSpec.describe Cyclotone::TimeSpan do
       expect(span.includes?(Rational(1, 2))).to be(true)
       expect(span.includes?(1)).to be(false)
     end
+
+    it "coerces float values through their decimal representation" do
+      span = described_class.new(0.1, 0.3)
+
+      expect(span.start).to eq(Rational(1, 10))
+      expect(span.includes?(0.2)).to be(true)
+    end
   end
 
   describe "#cycle_spans" do
@@ -77,6 +84,21 @@ RSpec.describe Cyclotone::TimeSpan do
       span = described_class.new(1, 1)
 
       expect(span.cycle_spans).to eq([])
+    end
+
+    it "can enumerate cycle spans lazily" do
+      span = described_class.new(0, 10_000)
+
+      expect(span.each_cycle_span.take(2)).to eq([
+        described_class.new(0, 1),
+        described_class.new(1, 2)
+      ])
+    end
+
+    it "can guard against unexpectedly large eager splits" do
+      span = described_class.new(0, 3)
+
+      expect { span.cycle_spans(max_cycles: 2) }.to raise_error(ArgumentError, /more than 2 cycles/)
     end
   end
 
