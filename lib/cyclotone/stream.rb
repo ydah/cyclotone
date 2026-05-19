@@ -1,22 +1,28 @@
 # frozen_string_literal: true
 
-require "singleton"
 require "set"
 
 module Cyclotone
   class Stream
-    include Singleton
     include Transition
 
-    attr_reader :scheduler
+    class << self
+      def instance
+        @instance ||= new
+      end
+    end
 
-    def initialize
+    attr_reader :scheduler, :fallback_error
+
+    def initialize(backend: nil, scheduler: nil)
       @slots = {}
       @muted = Set.new
       @soloed = Set.new
-      @scheduler = Scheduler.new(backend: Backends::OSCBackend.new(socket: UDPSocket.new))
-    rescue StandardError
-      @scheduler = Scheduler.new(backend: NullBackend.new)
+      @fallback_error = nil
+      @scheduler = scheduler || Scheduler.new(backend: backend || default_backend)
+    rescue StandardError => error
+      @fallback_error = error
+      @scheduler = Scheduler.new(backend: Backends::NullBackend.new)
     end
 
     def d(slot_id, pattern)
@@ -95,7 +101,9 @@ module Cyclotone
     end
 
     def mtrigger(period)
-      normalized_period = [period.to_i, 1].max
+      normalized_period = period.to_i
+      raise ArgumentError, "mtrigger period must be positive" unless normalized_period.positive?
+
       current_cycle = @scheduler.current_cycle
       next_cycle = current_cycle.ceil
       remainder = next_cycle % normalized_period
@@ -124,19 +132,23 @@ module Cyclotone
     end
 
     def normalize_d_slot_id(slot_id)
-      raw = slot_id.to_s
-      return raw.to_sym if raw.match?(/\Ad\d+\z/)
-      return :"d#{raw}" if raw.match?(/\A\d+\z/)
-
-      :"d#{raw}"
+      normalize_slot_id(slot_id, force_d: true)
     end
 
     def normalize_slot_reference(slot_id)
+      normalize_slot_id(slot_id, force_d: false)
+    end
+
+    def normalize_slot_id(slot_id, force_d:)
       raw = slot_id.to_s
       return raw.to_sym if raw.match?(/\Ad\d+\z/)
       return :"d#{raw}" if raw.match?(/\A\d+\z/)
 
-      raw.to_sym
+      force_d ? :"d#{raw}" : raw.to_sym
+    end
+
+    def default_backend
+      Backends::OSCBackend.new(socket: UDPSocket.new)
     end
 
     def sync_scheduler
@@ -170,16 +182,6 @@ module Cyclotone
       self
     end
 
-    class NullBackend
-      attr_reader :events
-
-      def initialize
-        @events = []
-      end
-
-      def send_event(event, at:, **options)
-        @events << { event: event, at: at, options: options }
-      end
-    end
+    NullBackend = Backends::NullBackend
   end
 end

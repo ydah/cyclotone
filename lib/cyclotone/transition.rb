@@ -129,23 +129,13 @@ module Cyclotone
     private
 
     def apply_gain_envelope(pattern, start_cycle:, duration:, direction:)
-      Pattern.ensure_pattern(pattern).fmap do |value|
-        next value unless value.is_a?(Hash)
-
-        factor = lambda do |time|
-          progress = ((time - start_cycle.to_f) / duration.to_f).clamp(0.0, 1.0)
-          direction == :in ? progress : 1.0 - progress
-        end
-
-        value.merge(gain_envelope: factor)
-      end.map_events do |event|
-        next event unless event.value.is_a?(Hash)
-
+      Pattern.ensure_pattern(pattern).map_events do |event|
         time = event.onset || event.part.start
-        value = event.value.dup
-        envelope = value.delete(:gain_envelope)
+        progress = transition_progress(time, start_cycle, duration)
+        factor = direction == :in ? progress : 1.0 - progress
+        value = event.value.is_a?(Hash) ? event.value.dup : { value: event.value }
         current_gain = value[:gain] || 1.0
-        value[:gain] = current_gain * envelope.call(time)
+        value[:gain] = current_gain * factor
         event.with_value(value)
       end
     end
@@ -172,7 +162,7 @@ module Cyclotone
 
     def clutch_source(slot_id, time, value, start_cycle, duration)
       progress = transition_progress(time, start_cycle, duration)
-      chosen = Support::Deterministic.float(:clutch, slot_id, time, value) < progress
+      chosen = Support::Deterministic.float(:clutch, slot_id, time) < progress
 
       chosen ? :replacement : :current
     end

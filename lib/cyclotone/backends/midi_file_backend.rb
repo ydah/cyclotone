@@ -13,12 +13,17 @@ module Cyclotone
 
       attr_reader :path, :channel, :ppqn, :bpm
 
-      def initialize(path:, bpm: DEFAULT_BPM, ppqn: DEFAULT_PPQN, channel: 0, track_name: DEFAULT_TRACK_NAME)
+      def self.bpm_from_cps(cps, beats_per_cycle: 4)
+        cps.to_f * 60.0 * beats_per_cycle.to_f
+      end
+
+      def initialize(path:, bpm: DEFAULT_BPM, ppqn: DEFAULT_PPQN, channel: 0, track_name: DEFAULT_TRACK_NAME, time_signature: [4, 4])
         @path = path
         @bpm = bpm.to_f
         @ppqn = ppqn.to_i
         @channel = channel.to_i
         @track_name = track_name.to_s
+        @time_signature = time_signature
         @messages = []
         @origin_time = nil
       end
@@ -28,17 +33,21 @@ module Cyclotone
         self
       end
 
+      def end_capture
+        self
+      end
+
       def clear
         @messages.clear
         @origin_time = nil
         self
       end
 
-      def send_event(event, at: Time.now.to_f, **_options)
+      def send_event(event, at: Time.now.to_f, cps: nil, **_options)
         capture_time = at.to_f
         @origin_time ||= capture_time
 
-        messages_for(event).each do |message|
+        messages_for(event, cps: cps).each do |message|
           @messages << normalize_message(message, capture_time)
         end
 
@@ -53,6 +62,18 @@ module Cyclotone
         path
       rescue StandardError => error
         raise ConnectionError, error.message
+      end
+
+      def flush
+        clear
+      end
+
+      def close
+        self
+      end
+
+      def panic
+        self
       end
 
       def midi_file_data
@@ -91,7 +112,8 @@ module Cyclotone
       def track_events
         events = [
           { tick: 0, priority: 0, data: tempo_event },
-          { tick: 0, priority: 1, data: track_name_event }
+          { tick: 0, priority: 1, data: time_signature_event },
+          { tick: 0, priority: 2, data: track_name_event }
         ]
 
         events.concat(@messages.map { |message| channel_track_event(message) })
@@ -155,6 +177,12 @@ module Cyclotone
       def track_name_event
         name = @track_name.dup.force_encoding(Encoding::ASCII_8BIT)
         "\xFF\x03".b << encode_variable_length(name.bytesize) << name
+      end
+
+      def time_signature_event
+        numerator, denominator = @time_signature
+        exponent = Math.log2(denominator.to_i).to_i
+        "\xFF\x58\x04".b << [numerator.to_i, exponent, 24, 8].pack("C4")
       end
 
       def end_of_track_event

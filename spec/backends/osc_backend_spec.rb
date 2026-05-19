@@ -86,4 +86,40 @@ RSpec.describe Cyclotone::Backends::OSCBackend do
     expect(attempts).to eq(1)
     expect(replacement_packets.length).to eq(1)
   end
+
+  it "supports custom addresses and OSC literal types" do
+    backend = described_class.new(socket: socket, address: "/cyclotone/play")
+    event = Cyclotone::Event.new(
+      whole: Cyclotone::TimeSpan.new(0, 1),
+      part: Cyclotone::TimeSpan.new(0, 1),
+      value: { enabled: true, muted: false, absent: nil, mode: :lead }
+    )
+
+    message = backend.build_message(event, at: 1.0)
+
+    expect(message).to include("/cyclotone/play")
+    expect(backend.send(:osc_type_tag, true)).to eq("T")
+    expect(backend.send(:osc_type_tag, false)).to eq("F")
+    expect(backend.send(:osc_type_tag, nil)).to eq("N")
+    expect(backend.send(:osc_type_tag, :lead)).to eq("S")
+  end
+
+  it "closes sockets that support close" do
+    closable = Class.new do
+      attr_reader :closed
+
+      def initialize
+        @closed = false
+      end
+
+      def close
+        @closed = true
+      end
+    end.new
+    backend = described_class.new(socket: closable)
+
+    backend.close
+
+    expect(closable.closed).to be(true)
+  end
 end

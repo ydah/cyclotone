@@ -7,45 +7,68 @@ module Cyclotone
     LOOKAHEAD = 0.3
     INTERVAL = 0.05
     DEFAULT_CPS = Rational(9, 16)
+    SENT_RETAIN_CYCLES = 4
 
-    attr_reader :backend, :cps, :lookahead, :interval
+    attr_reader :backend, :cps, :lookahead, :interval, :metrics
 
-    def initialize(cps: DEFAULT_CPS, backend:, lookahead: LOOKAHEAD, interval: INTERVAL, logger: nil)
+    def initialize(cps: DEFAULT_CPS, backend:, lookahead: LOOKAHEAD, interval: INTERVAL, logger: nil, retry_failed: false)
       @backend = backend
-      @cps = cps.to_f
+      @cps = normalize_cps(cps)
       @lookahead = lookahead
       @interval = interval
       @logger = logger
+      @retry_failed = retry_failed
       @mutex = Mutex.new
       @patterns = {}
       @sent = {}
       @running = false
+      @thread = nil
       @start_monotonic = monotonic_time
       @start_wall_time = Time.now.to_f
       @start_cycle = 0.0
       @last_cycle = 0.0
+      @metrics = { ticks: 0, last_tick_duration: 0.0, max_tick_duration: 0.0 }
     end
 
     def start
-      return if @running
+      @mutex.synchronize do
+        return self if @running
 
-      @running = true
-      @thread = Thread.new do
-        while @running
-          begin
-            tick
-          rescue StandardError => error
-            log_runtime_error(error)
+        @running = true
+        @thread = Thread.new do
+          Thread.current.abort_on_exception = false
+
+          while running?
+            tick_started = monotonic_time
+
+            begin
+              tick(tick_started)
+            rescue StandardError => error
+              log_runtime_error(error)
+            end
+
+            record_tick_duration(monotonic_time - tick_started)
+            sleep(@interval)
           end
-
-          sleep(@interval)
         end
       end
+
+      self
     end
 
-    def stop
-      @running = false
-      @thread&.join
+    def stop(timeout: nil)
+      thread = @mutex.synchronize do
+        @running = false
+        @thread
+      end
+
+      thread&.join(timeout)
+
+      @mutex.synchronize do
+        @thread = nil if @thread == thread && !thread&.alive?
+      end
+
+      self
     end
 
     def tick(now = monotonic_time)
@@ -59,10 +82,14 @@ module Cyclotone
     end
 
     def remove_pattern(slot_id)
-      @mutex.synchronize { @patterns.delete(slot_id) }
+      @mutex.synchronize do
+        @patterns.delete(slot_id)
+        @sent.delete_if { |key, _| key.first == slot_id }
+      end
     end
 
     def setcps(value)
+      normalized_cps = normalize_cps(value)
       now = monotonic_time
       wall_now = Time.now.to_f
 
@@ -72,7 +99,7 @@ module Cyclotone
         @start_cycle = current_cycle
         @start_monotonic = now
         @start_wall_time = wall_now
-        @cps = value.to_f
+        @cps = normalized_cps
       end
     end
 
@@ -99,7 +126,7 @@ module Cyclotone
     end
 
     def running?
-      @running
+      @mutex.synchronize { @running }
     end
 
     def render(duration:)
@@ -111,6 +138,9 @@ module Cyclotone
 
       logical_end = state[:start_cycle] + (duration_value * state[:cps])
       dispatch_until(logical_end, state)
+
+      state[:backend].end_capture if state[:backend].respond_to?(:end_capture)
+      state[:backend].write! if state[:backend].respond_to?(:write!)
       self
     end
 
@@ -138,31 +168,70 @@ module Cyclotone
       return if logical_end <= state[:last_cycle]
 
       query_span = TimeSpan.new(Rational(state[:last_cycle].to_r), Rational(logical_end.to_r))
+      failed = false
 
       state[:patterns].each do |slot_id, pattern|
         pattern.query_span(query_span).each do |event|
           next unless event.onset
 
           key = [slot_id, event.onset, event.value]
-          next if @sent[key]
+          next if sent?(key)
 
           absolute_time = state[:start_wall_time] + ((event.onset.to_f - state[:start_cycle]) / state[:cps])
-          state[:backend].send_event(event, at: absolute_time, cps: state[:cps])
-          @sent[key] = true
-        rescue StandardError => error
-          log_runtime_error(error)
+
+          begin
+            state[:backend].send_event(event, at: absolute_time, cps: state[:cps])
+            mark_sent(key, logical_end)
+          rescue StandardError => error
+            failed = true
+            log_runtime_error(error, slot_id: slot_id)
+          end
         end
       end
 
-      @mutex.synchronize { @last_cycle = logical_end }
+      @mutex.synchronize { @last_cycle = logical_end unless failed && @retry_failed }
+    end
+
+    def sent?(key)
+      @mutex.synchronize { @sent.key?(key) }
+    end
+
+    def mark_sent(key, logical_end)
+      @mutex.synchronize do
+        @sent[key] = logical_end
+        prune_sent(logical_end)
+      end
+    end
+
+    def prune_sent(logical_end)
+      retain_after = logical_end - SENT_RETAIN_CYCLES
+      @sent.delete_if { |_key, cycle| cycle < retain_after }
+    end
+
+    def record_tick_duration(duration)
+      @mutex.synchronize do
+        @metrics = {
+          ticks: @metrics[:ticks] + 1,
+          last_tick_duration: duration,
+          max_tick_duration: [@metrics[:max_tick_duration], duration].max
+        }
+      end
+    end
+
+    def normalize_cps(value)
+      normalized = value.to_f
+      raise ArgumentError, "cps must be positive" unless normalized.positive?
+
+      normalized
     end
 
     def time_to_cycle(time, cps_value, start_cycle, start_monotonic)
       start_cycle + ((time - start_monotonic) * cps_value)
     end
 
-    def log_runtime_error(error)
-      @logger&.call("[Cyclotone::Scheduler] #{error.class}: #{error.message}")
+    def log_runtime_error(error, slot_id: nil)
+      slot = slot_id ? " slot=#{slot_id}" : ""
+      @logger&.call("[Cyclotone::Scheduler#{slot}] #{error.class}: #{error.message}")
     end
   end
 end

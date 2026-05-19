@@ -68,4 +68,16 @@ RSpec.describe Cyclotone::Stream do
     expect(stream).to have_received(:sleep).with(0.375)
     expect(stream).to have_received(:sleep).with(1.375)
   end
+
+  it "can create independent stream instances" do
+    independent = described_class.new(backend: Cyclotone::Backends::NullBackend.new)
+    independent.d(1, "bd")
+
+    expect(independent.slot(:d1).query_cycle(0).map(&:value)).to eq(["bd"])
+    expect(independent).not_to equal(described_class.instance)
+  end
+
+  it "rejects invalid mtrigger periods" do
+    expect { stream.mtrigger(0) }.to raise_error(ArgumentError, /period/)
+  end
 end

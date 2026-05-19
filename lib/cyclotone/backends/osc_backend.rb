@@ -5,11 +5,12 @@ require "socket"
 module Cyclotone
   module Backends
     class OSCBackend
-      attr_reader :host, :port
+      attr_reader :host, :port, :address
 
-      def initialize(host: "127.0.0.1", port: 57_120, socket: nil, socket_factory: nil, retries: 1)
+      def initialize(host: "127.0.0.1", port: 57_120, address: "/dirt/play", socket: nil, socket_factory: nil, retries: 1)
         @host = host
         @port = port
+        @address = address
         @socket_factory = socket_factory || proc { UDPSocket.new }
         @retries = retries.to_i
         @socket = socket || build_socket
@@ -28,7 +29,7 @@ module Cyclotone
       end
 
       def build_message(event, at:, cps: nil)
-        encode_message("/dirt/play", payload_for(event, at: at, cps: cps))
+        encode_message(address, payload_for(event, at: at, cps: cps))
       end
 
       def send_event(event, at: Time.now.to_f, cps: nil)
@@ -37,6 +38,19 @@ module Cyclotone
         end
       rescue StandardError => error
         raise ConnectionError, error.message
+      end
+
+      def flush
+        self
+      end
+
+      def panic
+        self
+      end
+
+      def close
+        @socket.close if @socket.respond_to?(:close)
+        self
       end
 
       private
@@ -65,7 +79,7 @@ module Cyclotone
       end
 
       def flatten_hash(hash)
-        hash.each_with_object([]) do |(key, value), payload|
+        hash.sort_by { |key, _| Support::Deterministic.canonical_key(key) }.each_with_object([]) do |(key, value), payload|
           payload << key.to_s
           payload << value
         end
@@ -85,15 +99,21 @@ module Cyclotone
       end
 
       def encode_message(address, arguments)
-        type_tags = arguments.map do |argument|
-          case argument
-          when Integer then "i"
-          when Float then "f"
-          else "s"
-          end
-        end.join
+        type_tags = arguments.map { |argument| osc_type_tag(argument) }.join
 
-        padded(address) + padded(",#{type_tags}") + arguments.map { |argument| encode_argument(argument) }.join
+        padded(address) + padded(",#{type_tags}") + arguments.filter_map { |argument| encode_argument(argument) }.join
+      end
+
+      def osc_type_tag(argument)
+        case argument
+        when Integer then "i"
+        when Float then "f"
+        when TrueClass then "T"
+        when FalseClass then "F"
+        when NilClass then "N"
+        when Symbol then "S"
+        else "s"
+        end
       end
 
       def encode_argument(argument)
@@ -102,15 +122,19 @@ module Cyclotone
           [argument].pack("N")
         when Float
           [argument].pack("g")
+        when TrueClass, FalseClass, NilClass
+          nil
+        when Symbol
+          padded(argument.to_s)
         else
           padded(argument.to_s)
         end
       end
 
       def padded(string)
-        bytes = "#{string}\0"
+        bytes = "#{string}\0".b
         padding = (4 - (bytes.bytesize % 4)) % 4
-        bytes + ("\0" * padding)
+        bytes + ("\0".b * padding)
       end
     end
   end

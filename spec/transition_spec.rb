@@ -58,4 +58,14 @@ RSpec.describe Cyclotone::Stream do
     expect(first_gain).to be > later_gain
     expect(later_gain).to eq(0.0)
   end
+
+  it "applies gain envelopes to non-hash values" do
+    stream.reset_cycles
+    stream.p(:lead, Cyclotone::Pattern.pure("bd"))
+
+    stream.fade_out(2)
+
+    value = stream.slot(:lead).query_cycle(0).first.value
+    expect(value).to include(value: "bd", gain: be_between(0.0, 1.0))
+  end
 end

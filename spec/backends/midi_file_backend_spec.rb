@@ -29,6 +29,7 @@ RSpec.describe Cyclotone::Backends::MIDIFileBackend do
     expect(data).to start_with("MThd".b)
     expect(data).to include("MTrk".b)
     expect(data).to include("\xFF\x51\x03".b)
+    expect(data).to include("\xFF\x58\x04".b)
     expect(data).to include([0x92, 60, 100].pack("C3"))
     expect(data).to include([0x82, 60, 0].pack("C3"))
     expect(data).to include([0xB1, 74, 90].pack("C3"))
@@ -47,5 +48,19 @@ RSpec.describe Cyclotone::Backends::MIDIFileBackend do
 
     expect(File.exist?(output_path)).to be(true)
     expect(File.binread(output_path)).to start_with("MThd".b)
+  end
+
+  it "derives bpm from scheduler cps" do
+    expect(described_class.bpm_from_cps(0.5, beats_per_cycle: 4)).to eq(120.0)
+  end
+
+  it "writes when used through scheduler render" do
+    backend = described_class.new(path: output_path, bpm: 120)
+    scheduler = Cyclotone::Scheduler.new(cps: 1, backend: backend)
+    scheduler.update_pattern(:d1, Cyclotone::Controls.note(60))
+
+    scheduler.render(duration: 0.25)
+
+    expect(File.exist?(output_path)).to be(true)
   end
 end

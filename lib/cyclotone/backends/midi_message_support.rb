@@ -3,31 +3,35 @@
 module Cyclotone
   module Backends
     module MIDIMessageSupport
-      def messages_for(event)
+      def messages_for(event, cps: nil)
         values = event.value.is_a?(Hash) ? event.value : { note: event.value }
         return control_change_messages(values) if values.key?(:cc)
 
-        note = values[:note]
-        return [] if note.nil?
+        notes = Array(values[:note])
+        return [] if notes.empty? || notes.all?(&:nil?)
 
         active_channel = normalize_channel(values[:channel] || channel)
-        sustain = [extract_sustain(values, event), 0.0].max
+        sustain = [extract_sustain(values, event, cps), 0.0].max
+        attack_velocity = normalize_velocity(values[:velocity] || values[:gain] || 1.0)
+        release_velocity = normalize_velocity(values.fetch(:release_velocity, 0))
 
-        [
-          {
-            type: :note_on,
-            channel: active_channel,
-            note: normalize_data_byte(note),
-            velocity: normalize_velocity(values[:velocity] || values[:gain] || 1.0)
-          },
-          {
-            type: :note_off,
-            channel: active_channel,
-            note: normalize_data_byte(note),
-            velocity: 0,
-            delay: sustain
-          }
-        ]
+        notes.compact.flat_map do |note|
+          [
+            {
+              type: :note_on,
+              channel: active_channel,
+              note: normalize_data_byte(note),
+              velocity: attack_velocity
+            },
+            {
+              type: :note_off,
+              channel: active_channel,
+              note: normalize_data_byte(note),
+              velocity: release_velocity,
+              delay: sustain
+            }
+          ]
+        end
       end
 
       private
@@ -36,7 +40,7 @@ module Cyclotone
         cc_values = values[:cc].is_a?(Hash) ? values[:cc] : {}
         active_channel = normalize_channel(values[:channel] || channel)
 
-        cc_values.map do |controller, amount|
+        cc_values.sort_by { |controller, _| controller.to_i }.map do |controller, amount|
           {
             type: :cc,
             channel: active_channel,
@@ -46,7 +50,13 @@ module Cyclotone
         end
       end
 
-      def extract_sustain(values, event)
+      def extract_sustain(values, event, cps)
+        if values.key?(:sustain_cycles)
+          return values[:sustain_cycles].to_f / cps.to_f if cps.to_f.positive?
+
+          return values[:sustain_cycles].to_f
+        end
+
         sustain = values[:sustain]
         sustain = event.duration if sustain.nil?
         sustain ||= 1
